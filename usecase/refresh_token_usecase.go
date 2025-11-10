@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/domain"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/internal/tokenutil"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/tokenutil"
 )
 
 type refreshTokenUsecase struct {

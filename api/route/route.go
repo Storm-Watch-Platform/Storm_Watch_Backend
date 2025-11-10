@@ -3,9 +3,9 @@
 // import (
 // 	"time"
 
-// 	"github.com/amitshekhariitbhu/go-backend-clean-architecture/api/middleware"
-// 	"github.com/amitshekhariitbhu/go-backend-clean-architecture/bootstrap"
-// 	"github.com/amitshekhariitbhu/go-backend-clean-architecture/mongo"
+// 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/api/middleware"
+// 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/bootstrap"
+// 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/mongo"
 // 	"github.com/gin-gonic/gin"
 // )
 
@@ -31,9 +31,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/api/middleware"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/bootstrap"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/mongo"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/api/middleware"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/bootstrap"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/mongo"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 )

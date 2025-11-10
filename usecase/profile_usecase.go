@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/domain"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
 )
 
 type profileUsecase struct {

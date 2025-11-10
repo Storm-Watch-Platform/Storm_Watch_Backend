@@ -1,4 +1,4 @@
-module github.com/amitshekhariitbhu/go-backend-clean-architecture
+module github.com/Storm-Watch-Platform/Storm_Watch_Backend
 
 go 1.19
 
@@ -32,7 +32,6 @@ require (
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect

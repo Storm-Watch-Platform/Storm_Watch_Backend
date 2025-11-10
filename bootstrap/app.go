@@ -1,6 +1,6 @@
 package bootstrap
 
-import "github.com/amitshekhariitbhu/go-backend-clean-architecture/mongo"
+import "github.com/Storm-Watch-Platform/Storm_Watch_Backend/mongo"
 
 type Application struct {
 	Env   *Env

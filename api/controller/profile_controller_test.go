@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/api/controller"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/domain"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/domain/mocks"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/api/controller"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain/mocks"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

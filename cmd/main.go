@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	route "github.com/amitshekhariitbhu/go-backend-clean-architecture/api/route"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/bootstrap"
+	route "github.com/Storm-Watch-Platform/Storm_Watch_Backend/api/route"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/bootstrap"
 	"github.com/gin-gonic/gin"
 )
 

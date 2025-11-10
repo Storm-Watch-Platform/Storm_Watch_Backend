@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/domain"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/internal/tokenutil"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/tokenutil"
 	"github.com/gin-gonic/gin"
 )
 

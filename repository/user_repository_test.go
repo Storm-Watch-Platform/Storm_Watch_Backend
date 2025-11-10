@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/domain"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/mongo/mocks"
-	"github.com/amitshekhariitbhu/go-backend-clean-architecture/repository"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/mongo/mocks"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.mongodb.org/mongo-driver/bson/primitive"
