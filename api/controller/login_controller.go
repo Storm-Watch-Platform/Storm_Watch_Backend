@@ -11,19 +11,20 @@ import (
 )
 
 type LoginController struct {
-	LoginUsecase domain.LoginUsecase
+	LoginUsecase domain.LoginUsecase // thông qua domain: interface
 	Env          *bootstrap.Env
 }
 
 func (lc *LoginController) Login(c *gin.Context) {
 	var request domain.LoginRequest
 
-	err := c.ShouldBind(&request)
+	err := c.ShouldBind(&request) // check định dạng json
 	if err != nil {
 		c.JSON(http.StatusBadRequest, domain.ErrorResponse{Message: err.Error()})
 		return
 	}
 
+	//
 	user, err := lc.LoginUsecase.GetUserByPhone(c, request.Phone)
 	if err != nil {
 		c.JSON(http.StatusNotFound, domain.ErrorResponse{Message: "User not found with the given phone"})

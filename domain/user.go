@@ -15,6 +15,7 @@ type User struct {
 	Name     string             `bson:"name"`
 	Phone    string             `bson:"phone"`
 	Password string             `bson:"password"`
+	Role     string             `bson:"role"`
 }
 
 type UserRepository interface {

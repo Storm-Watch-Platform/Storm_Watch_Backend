@@ -10,10 +10,12 @@ import (
 
 func main() {
 
+	// mở kết nối
 	app := bootstrap.App()
 
 	env := app.Env
 
+	// lấy database từ cluster
 	db := app.Mongo.Database(env.DBName)
 	defer app.CloseDBConnection()
 
