@@ -47,6 +47,7 @@ func (sc *SignupController) Signup(c *gin.Context) {
 		Phone:    request.Phone,
 		Password: request.Password,
 		Role:     "member",
+		GroupIDs: []primitive.ObjectID{},
 	}
 
 	err = sc.SignupUsecase.Create(c, &user)

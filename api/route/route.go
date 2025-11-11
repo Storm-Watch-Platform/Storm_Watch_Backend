@@ -23,4 +23,7 @@ func Setup(env *bootstrap.Env, timeout time.Duration, db mongo.Database, gin *gi
 	// All Private APIs -> nhóm API yêu cầu xác thực bằng AccessToken
 	NewProfileRouter(env, timeout, db, protectedRouter)
 	NewTaskRouter(env, timeout, db, protectedRouter)
+
+	// về group
+	NewGroupRouter(env, timeout, db, protectedRouter)
 }

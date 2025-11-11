@@ -70,3 +70,12 @@ func (ur *userRepository) GetByID(c context.Context, id string) (domain.User, er
 	err = collection.FindOne(c, bson.M{"_id": idHex}).Decode(&user)
 	return user, err
 }
+
+func (ur *userRepository) AddGroup(ctx context.Context, userID primitive.ObjectID, groupID primitive.ObjectID) error {
+	collection := ur.database.Collection(ur.collection)
+	filter := bson.M{"_id": userID}
+	update := bson.M{"$addToSet": bson.M{"groupIDs": groupID}}
+
+	_, err := collection.UpdateOne(ctx, filter, update)
+	return err
+}
