@@ -21,37 +21,31 @@ type WSController struct {
 	WSManager *ws.WSManager
 }
 
-// FE mở socket qua /ws
-// MAIN WEBSOCKET ENDPOINT (FE connect stomp vào đây)
+// MAIN WEBSOCKET ENDPOINT (FE connect STOMP vào đây)
 func (c *WSController) HandleWS(ctx *gin.Context) {
-	// upgrade HTTP connection to WebSocket
 	conn, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		return
 	}
 
-	// chưa có user id
 	client := &ws.Client{
 		Conn: conn,
 	}
 
-	// mở xong còn cần handshake nữa, chờ CONNECT frame
+	// tạm lưu trước CONNECT frame
 	c.WSManager.AddTempClient(client)
 
-	// listen STOMP frames
-	// thêm thread để server xử lý tiếp
+	// xử lý các frame STOMP trong goroutine riêng
 	go c.handleFrames(client)
 }
 
 func (c *WSController) handleFrames(client *ws.Client) {
-	// ngắt kết nối hoặc lỗi thì bái bai client
 	defer func() {
 		c.WSManager.RemoveClient(client)
 		client.Conn.Close()
 	}()
 
 	for {
-		// chờ frame từ client
 		_, raw, err := client.Conn.ReadMessage()
 		if err != nil {
 			return
@@ -60,41 +54,25 @@ func (c *WSController) handleFrames(client *ws.Client) {
 		frame := parseFrame(string(raw))
 
 		switch frame.Command {
-
-		// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-		// CONNECT
-		// user-id:abc123
-		// background:false
 		case "CONNECT":
-			// cập nhật temp client thành chính thức
 			client.UserID = frame.Headers["user-id"]
 			client.IsBackground = frame.Headers["background"] == "true"
 
 			c.WSManager.PromoteTempClient(client)
 
-			// reply CONNECTED
 			resp := "CONNECTED\nversion:1.2\n\n\x00"
 			client.Conn.WriteMessage(websocket.TextMessage, []byte(resp))
 
-		// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 		case "SUBSCRIBE":
-			// follower: A; target-user: B
-			// followers[B] = [A1, A2, ...]
-			follower := client.UserID // mình follow người ta
 			target := frame.Headers["target-user"]
-			c.WSManager.Follow(follower, target)
+			c.WSManager.Subscribe(client, target)
 
-		// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 		case "UNSUBSCRIBE":
-			// bỏ A khỏi followers[B]
-			follower := client.UserID
 			target := frame.Headers["target-user"]
-			c.WSManager.Unfollow(follower, target)
+			c.WSManager.Unsubscribe(client, target)
 
-		// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 		case "SEND":
-			// A gửi location -> tìm ai đang follow A để push location
-			// SEND location JSON
+			// gửi location → push tới những client đã subscribe sender
 			c.WSManager.SendLocationFromUser(client.UserID, frame.Body)
 		}
 	}
@@ -106,23 +84,6 @@ type StompFrame struct {
 	Headers map[string]string
 	Body    string
 }
-
-// SEND
-// destination:/user/123/location
-// content-type:application/json
-
-// {"lat":10,"lng":20}\x00
-
-// input CONNECT\nuser-id:123\nbackground:false\n\n\x00
-
-// StompFrame{
-//     Command: "CONNECT",
-//     Headers: map[string]string{
-//         "user-id": "123",
-//         "background": "false",
-//     },
-//     Body: "",
-// }
 
 func parseFrame(raw string) StompFrame {
 	sc := bufio.NewScanner(strings.NewReader(raw))
@@ -150,7 +111,7 @@ func parseFrame(raw string) StompFrame {
 	for sc.Scan() {
 		body += sc.Text()
 	}
-
 	f.Body = strings.TrimSuffix(body, "\x00")
+
 	return f
 }

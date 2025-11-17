@@ -6,30 +6,31 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Client đại diện 1 connection/tab
 type Client struct {
 	Conn         *websocket.Conn
 	UserID       string
 	IsBackground bool
+	// subscribed targets (set of userID being followed)
+	Subscriptions map[string]bool
 }
 
+// WSManager quản lý tất cả client & follow/subscription
 type WSManager struct {
 	mu sync.RWMutex
 
-	// userID → list of connections
+	// userID -> list of connections (all tabs)
 	users map[string][]*Client
 
-	// B → { A: true }
-	followers map[string]map[string]bool
-
-	// temp clients before CONNECT frame
+	// temp clients chưa CONNECT
 	temp []*Client
 }
 
+// Khởi tạo WSManager
 func NewWSManager() *WSManager {
 	return &WSManager{
-		users:     map[string][]*Client{},
-		followers: map[string]map[string]bool{},
-		temp:      []*Client{},
+		users: make(map[string][]*Client),
+		temp:  []*Client{},
 	}
 }
 
@@ -40,13 +41,12 @@ func (m *WSManager) AddTempClient(c *Client) {
 	m.temp = append(m.temp, c)
 }
 
-// chuyển client sau CONNECT
+// promote client sau CONNECT frame
 func (m *WSManager) PromoteTempClient(c *Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// add to real
-	// thêm conn cho user đó & quăng ra khỏi temp
+	// add to real user map
 	m.users[c.UserID] = append(m.users[c.UserID], c)
 
 	// remove from temp
@@ -58,13 +58,12 @@ func (m *WSManager) PromoteTempClient(c *Client) {
 	}
 }
 
-// xoá client bật tab ra ngoài
-// tắt mạng, đóng tab -> remove
+// Remove client khi tab đóng hoặc lỗi
 func (m *WSManager) RemoveClient(c *Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// xóa khỏi users
+	// remove khỏi user map
 	if list, ok := m.users[c.UserID]; ok {
 		newList := []*Client{}
 		for _, cc := range list {
@@ -79,7 +78,7 @@ func (m *WSManager) RemoveClient(c *Client) {
 		}
 	}
 
-	// xóa khỏi temp
+	// remove khỏi temp
 	for i, t := range m.temp {
 		if t == c {
 			m.temp = append(m.temp[:i], m.temp[i+1:]...)
@@ -88,50 +87,50 @@ func (m *WSManager) RemoveClient(c *Client) {
 	}
 }
 
-// A follow B
-func (m *WSManager) Follow(follower, target string) {
+// SUBSCRIBE target
+func (m *WSManager) Subscribe(c *Client, targetUserID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.followers[target]; !ok {
-		m.followers[target] = map[string]bool{}
+	if c.Subscriptions == nil {
+		c.Subscriptions = make(map[string]bool)
 	}
 
-	m.followers[target][follower] = true
+	c.Subscriptions[targetUserID] = true
 }
 
-// A unfollow B
-func (m *WSManager) Unfollow(follower, target string) {
+// UNSUBSCRIBE target
+func (m *WSManager) Unsubscribe(c *Client, targetUserID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if set, ok := m.followers[target]; ok {
-		delete(set, follower)
-		if len(set) == 0 {
-			delete(m.followers, target)
-		}
+	if c.Subscriptions != nil {
+		delete(c.Subscriptions, targetUserID)
 	}
 }
 
-// B gửi vị trí → push đến followers
-func (m *WSManager) SendLocationFromUser(userID string, body string) {
+// B gửi vị trí → push tới tất cả client subscribe B
+func (m *WSManager) SendLocationFromUser(targetUserID string, body string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	follows, ok := m.followers[userID]
-	if !ok {
-		return // không có ai theo dõi
-	}
+	for _, clients := range m.users {
+		for _, c := range clients {
+			if c.Subscriptions != nil && c.Subscriptions[targetUserID] {
+				// gửi STOMP MESSAGE frame
+				msg := "MESSAGE\n" +
+					"content-type:application/json\n\n" +
+					body + "\x00"
 
-	for followerID := range follows {
-		list := m.users[followerID]
-		for _, cli := range list {
-			// gửi STOMP MESSAGE frame
-			msg := "MESSAGE\n" +
-				"content-type:application/json\n\n" +
-				body + "\x00"
-
-			cli.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
+				c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
+			}
 		}
 	}
+}
+
+// Lấy tất cả connection của user
+func (m *WSManager) GetClients(userID string) []*Client {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.users[userID]
 }
