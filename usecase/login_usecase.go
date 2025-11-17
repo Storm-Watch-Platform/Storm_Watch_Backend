@@ -33,3 +33,15 @@ func (lu *loginUsecase) CreateAccessToken(user *domain.User, secret string, expi
 func (lu *loginUsecase) CreateRefreshToken(user *domain.User, secret string, expiry int) (refreshToken string, err error) {
 	return tokenutil.CreateRefreshToken(user, secret, expiry)
 }
+
+// func (lu *loginUsecase) GetGroupsOfUser(userID string) ([]string, error) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), lu.contextTimeout)
+// 	defer cancel()
+
+// 	user, err := lu.userRepository.GetByID(ctx, userID) // giả sử repo có GetByID
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return user.groupIDs, nil // user.GroupIDs là slice string từ document DB
+// }

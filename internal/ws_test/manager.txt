@@ -1,0 +1,271 @@
+// package ws
+
+// import (
+// 	"sync"
+
+// 	"github.com/gorilla/websocket"
+// )
+
+// // Mỗi user có thể mở nhiều tab (multi-connection)
+// type Client struct {
+// 	Conn    *websocket.Conn
+// 	UserID  string
+// 	GroupID string // group hiện tại mà client đang xem
+// 	Active  bool   // client tab có đang active hay không
+// }
+
+// type WSManager struct {
+// 	mu     sync.RWMutex
+// 	users  map[string][]*Client       // userID -> list connections (tab)
+// 	groups map[string]map[string]bool // groupID -> set userID online
+// }
+
+// func NewWSManager() *WSManager {
+// 	return &WSManager{
+// 		users:  make(map[string][]*Client),
+// 		groups: make(map[string]map[string]bool),
+// 	}
+// }
+
+// // AddClient thêm connection mới
+// func (m *WSManager) AddClient(c *Client) {
+// 	m.mu.Lock() // ngăn race condition
+// 	defer m.mu.Unlock()
+
+// 	// add (userid, groupid, active=True)
+// 	// trong users có <userID>: [client1(cho group1), client2(cho group2), ...]
+// 	// groops có <groupID>: {userID1: true, userID2: true, ...}
+
+// 	// Thêm vào users map
+// 	// userId -> danh sách các connection (tab)
+// 	m.users[c.UserID] = append(m.users[c.UserID], c) // xóa chậm cũng đc, không tới nỗi nào
+
+// 	// Thêm user vào group
+// 	/// chưa có group thì khởi tạo
+// 	if _, ok := m.groups[c.GroupID]; !ok {
+// 		// chưa có group thì khởi tạo map userID rỗng
+// 		m.groups[c.GroupID] = make(map[string]bool)
+// 	}
+
+// 	// gán vào & đánh dấu đang online
+// 	// "groupA": {"Alice": true, "Bob": true}
+// 	m.groups[c.GroupID][c.UserID] = true // -> xóa nhanh
+// }
+
+// // RemoveClient xoá connection
+// func (m *WSManager) RemoveClient(c *Client) {
+// 	m.mu.Lock()
+// 	defer m.mu.Unlock()
+
+// 	// Xoá khỏi users map
+// 	if conns, ok := m.users[c.UserID]; ok {
+// 		newConns := []*Client{}
+// 		for _, conn := range conns { // tất cả conn của user
+// 			if conn != c { // lọc ra, cái nào không phải c tắt thì giữ lại
+// 				newConns = append(newConns, conn)
+// 			}
+// 		}
+// 		if len(newConns) == 0 { // nếu không còn connection nào -> user offline
+// 			delete(m.users, c.UserID) // bỏ luôn user đó khỏi users map
+// 			// Nếu user hết connection thì xoá khỏi tất cả groups
+// 			for gid := range m.groups { // xóa user khỏi tất cả groups
+// 				delete(m.groups[gid], c.UserID)
+// 			}
+// 		} else {
+// 			m.users[c.UserID] = newConns
+// 		}
+// 	}
+// }
+
+// // Broadcast gửi message chỉ tới client đang active tab trong group
+// func (m *WSManager) Broadcast(groupID string, data interface{}) {
+// 	m.mu.RLock()
+// 	defer m.mu.RUnlock()
+
+// 	userIDs, ok := m.groups[groupID]
+// 	if !ok {
+// 		return
+// 	}
+
+// 	for userID := range userIDs {
+// 		conns := m.users[userID]
+// 		for _, c := range conns {
+// 			if c.Active && c.GroupID == groupID {
+// 				c.Conn.WriteJSON(data)
+// 			}
+// 		}
+// 	}
+// }
+
+// // BroadcastAlert gửi message tới tất cả client online trong group
+// func (m *WSManager) BroadcastAlert(groupID string, data interface{}) {
+// 	m.mu.RLock()
+// 	defer m.mu.RUnlock()
+
+// 	userIDs, ok := m.groups[groupID]
+// 	if !ok {
+// 		return
+// 	}
+
+// 	for userID := range userIDs {
+// 		conns := m.users[userID]
+// 		for _, c := range conns {
+// 			c.Conn.WriteJSON(data)
+// 		}
+// 	}
+// }
+
+package ws
+
+import (
+	"sync"
+
+	"github.com/gorilla/websocket"
+)
+
+// Client đại diện cho 1 tab kết nối WebSocket
+type Client struct {
+	Conn    *websocket.Conn
+	UserID  string
+	GroupID string // group mà tab đang xem
+	Active  bool   // tab có đang active hay không
+}
+
+// WSManager quản lý tất cả client online
+type WSManager struct {
+	mu     sync.RWMutex
+	users  map[string][]*Client       // userID -> list connection/tab
+	groups map[string]map[string]bool // groupID -> set userID online
+}
+
+// Khởi tạo WSManager
+func NewWSManager() *WSManager {
+	return &WSManager{
+		users:  make(map[string][]*Client),
+		groups: make(map[string]map[string]bool),
+	}
+}
+
+// AddClient thêm một connection mới
+func (m *WSManager) AddClient(c *Client) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Thêm connection vào users map
+	m.users[c.UserID] = append(m.users[c.UserID], c)
+
+	// Thêm user vào group map nếu chưa có
+	if _, ok := m.groups[c.GroupID]; !ok {
+		m.groups[c.GroupID] = make(map[string]bool)
+	}
+	m.groups[c.GroupID][c.UserID] = true
+}
+
+// RemoveClient xóa một connection
+func (m *WSManager) RemoveClient(c *Client) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	conns, ok := m.users[c.UserID]
+	if !ok {
+		return
+	}
+
+	newConns := []*Client{}
+	for _, conn := range conns {
+		if conn != c {
+			newConns = append(newConns, conn)
+		}
+	}
+
+	if len(newConns) == 0 {
+		// User hết tab → remove khỏi users map
+		delete(m.users, c.UserID)
+		// Xóa user khỏi group hiện tại
+		delete(m.groups[c.GroupID], c.UserID)
+		if len(m.groups[c.GroupID]) == 0 {
+			// Optional: xóa group rỗng để giảm memory
+			delete(m.groups, c.GroupID)
+		}
+	} else {
+		m.users[c.UserID] = newConns
+		// Kiểm tra nếu user hết connection trong group đó thì remove
+		stillInGroup := false
+		for _, conn := range newConns {
+			if conn.GroupID == c.GroupID {
+				stillInGroup = true
+				break
+			}
+		}
+		if !stillInGroup {
+			delete(m.groups[c.GroupID], c.UserID)
+			if len(m.groups[c.GroupID]) == 0 {
+				delete(m.groups, c.GroupID)
+			}
+		}
+	}
+}
+
+// SetActive cập nhật trạng thái active và group của tab
+func (m *WSManager) SetActive(c *Client, active bool, groupID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	c.Active = active
+	c.GroupID = groupID
+
+	// Cập nhật group map
+	if _, ok := m.groups[groupID]; !ok {
+		m.groups[groupID] = make(map[string]bool)
+	}
+	m.groups[groupID][c.UserID] = true
+}
+
+// Broadcast gửi message tới tất cả tab active trong group
+func (m *WSManager) Broadcast(groupID string, data interface{}) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	userIDs, ok := m.groups[groupID]
+	if !ok {
+		return
+	}
+
+	for userID := range userIDs {
+		conns := m.users[userID]
+		for _, c := range conns {
+			if c.GroupID == groupID && c.Active {
+				_ = c.Conn.WriteJSON(data) // Optional: handle error
+			}
+		}
+	}
+}
+
+// BroadcastLocation gửi vị trí tới tất cả user online (bỏ filter Active)
+// Trả về true nếu ít nhất 1 user nhận message, false nếu không ai online
+func (m *WSManager) BroadcastLocation(groupID string, senderUserID string, data interface{}) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	userIDs, ok := m.groups[groupID]
+	if !ok || len(userIDs) == 0 {
+		return false
+	}
+
+	someoneOnline := false
+	for userID := range userIDs {
+		if userID == senderUserID {
+			continue // không gửi lại cho chính sender
+		}
+
+		conns := m.users[userID]
+		for _, c := range conns {
+			if c.GroupID == groupID {
+				if err := c.Conn.WriteJSON(data); err == nil {
+					someoneOnline = true
+				}
+			}
+		}
+	}
+	return someoneOnline
+}

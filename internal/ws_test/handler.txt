@@ -1,0 +1,66 @@
+package ws
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/gorilla/websocket"
+)
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+type WSHandler struct {
+	Manager *WSManager
+}
+
+func NewWSHandler(manager *WSManager) *WSHandler {
+	return &WSHandler{Manager: manager}
+}
+
+// HandleWS: client kết nối WS
+func (h *WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	groupID := r.URL.Query().Get("group_id")
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+
+	client := &Client{
+		Conn:     conn,
+		UserID:   userID,
+		GroupID:  groupID,
+		Active:   true,
+		LastSeen: time.Now(),
+	}
+
+	h.Manager.AddClient(client)
+
+	defer h.Manager.RemoveClient(client)
+
+	// Read loop
+	for {
+		var msg struct {
+			Lat     float64 `json:"lat"`
+			Lng     float64 `json:"lng"`
+			IsSOS   bool    `json:"is_sos"`
+			GroupID string  `json:"group_id"`
+		}
+
+		if err := conn.ReadJSON(&msg); err != nil {
+			break
+		}
+
+		h.Manager.SendPosition(PositionUpdate{
+			UserID:    userID,
+			GroupID:   msg.GroupID,
+			Lat:       msg.Lat,
+			Lng:       msg.Lng,
+			Timestamp: time.Now(),
+			IsSOS:     msg.IsSOS,
+		})
+	}
+}

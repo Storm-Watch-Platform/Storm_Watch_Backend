@@ -1,0 +1,49 @@
+package controller
+
+import (
+	"net/http"
+
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/ws"
+	"github.com/gin-gonic/gin"
+)
+
+type WSController struct {
+	// quản lý WebSocket
+	WSManager *ws.WSManager
+}
+
+// định nghĩa payload nhận từ client
+type LocationPayload struct {
+	UserID   string  `json:"userId"`
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+	Accuracy float64 `json:"accuracy_m"`
+	ShareTTL int     `json:"share_ttl_s"`
+	Status   string  `json:"status"`
+	GroupID  string  `json:"groupId"` // optional
+}
+
+// POST /location
+func (c *WSController) ReceiveLocation(ctx *gin.Context) {
+	var payload LocationPayload
+	if err := ctx.ShouldBindJSON(&payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	groupIDs := []string{}
+	if payload.GroupID != "" {
+		// nếu client có gửi groupID thì chỉ broadcast tới group đó
+		groupIDs = append(groupIDs, payload.GroupID)
+	} else {
+		// nếu không có, lấy từ cache các group user thuộc về
+		// fallback: lấy cache các group user thuộc về
+		groupIDs = c.WSManager.GetUserGroups(payload.UserID)
+	}
+
+	// broadcast
+	// gửi tới tất cả connection của user trong các group
+	c.WSManager.BroadcastLocation(payload.UserID, groupIDs, payload)
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
+}

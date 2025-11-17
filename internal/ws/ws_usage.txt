@@ -1,0 +1,30 @@
+✅ (4) FE STOMP FORMAT (FE gọi ntn)
+① CONNECT
+CONNECT
+accept-version:1.2
+user-id:USER_123
+background:true
+
+\x00
+
+② SUBSCRIBE (A theo dõi B)
+SUBSCRIBE
+id:sub-1
+target-user:USER_B
+
+\x00
+
+③ SEND LOCATION
+SEND
+destination:/location
+
+{"lat":10.1,"lng":20.9}
+
+\x00
+
+④ MESSAGE trả về từ BE (dùng push realtime)
+MESSAGE
+content-type:application/json
+
+{"lat":10.1,"lng":20.9}
+\x00

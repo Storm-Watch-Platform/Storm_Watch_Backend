@@ -11,7 +11,7 @@ import (
 )
 
 type LoginController struct {
-	LoginUsecase domain.LoginUsecase // thông qua domain: interface
+	LoginUsecase domain.LoginUsecase
 	Env          *bootstrap.Env
 }
 
@@ -52,6 +52,20 @@ func (lc *LoginController) Login(c *gin.Context) {
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}
+
+	// --- Bước mới: lấy group của user từ DB và cập nhật WSManager ---
+	// groups, err := lc.LoginUsecase.GetGroupsOfUser(user.ID)
+	// user.GroupIDs là []primitive.ObjectID
+	// groupIDs := make([]string, len(user.GroupIDs))
+	// for i, id := range user.GroupIDs {
+	// 	groupIDs[i] = id.Hex() // chuyển sang string để cache
+	// }
+	// // Cập nhật WSManager
+	// lc.WSManager.SetUserGroups(user.ID.Hex(), groupIDs)
+
+	// // --- DEBUG: in cache ra console ---
+	// cached := lc.WSManager.GetUserGroups(user.ID.Hex())
+	// fmt.Printf("DEBUG: userID = %s, cached groups = %+v\n", user.ID.Hex(), cached)
 
 	c.JSON(http.StatusOK, loginResponse)
 }

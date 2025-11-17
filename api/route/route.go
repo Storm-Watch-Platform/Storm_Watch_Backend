@@ -10,6 +10,7 @@ import (
 )
 
 func Setup(env *bootstrap.Env, timeout time.Duration, db mongo.Database, gin *gin.Engine) {
+
 	publicRouter := gin.Group("")
 	// All Public APIs
 	NewSignupRouter(env, timeout, db, publicRouter)
@@ -26,4 +27,9 @@ func Setup(env *bootstrap.Env, timeout time.Duration, db mongo.Database, gin *gi
 
 	// về group
 	NewGroupRouter(env, timeout, db, protectedRouter)
+
+	// --- Thêm WebSocket route vào cùng hàm Setup ---
+	// NewWSRouter(env, timeout, db, protectedRouter)
+
+	NewWSRouter(env, timeout, publicRouter)
 }

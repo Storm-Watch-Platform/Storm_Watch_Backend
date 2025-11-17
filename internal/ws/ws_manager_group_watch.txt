@@ -1,0 +1,138 @@
+package ws
+
+import (
+	"sync"
+
+	"github.com/gorilla/websocket"
+)
+
+// Client đại diện 1 tab / connection
+type Client struct {
+	Conn    *websocket.Conn
+	UserID  string
+	GroupID string // rỗng nếu chỉ background
+}
+
+// WSManager quản lý tất cả connection
+type WSManager struct {
+	mu         sync.RWMutex
+	users      map[string][]*Client       // userID -> list connection/tab
+	groups     map[string]map[string]bool // groupID -> set(userID)
+	userGroups map[string][]string        // userID -> list groupID (cache)
+}
+
+// Khởi tạo
+func NewWSManager() *WSManager {
+	return &WSManager{
+		users:      make(map[string][]*Client),
+		groups:     make(map[string]map[string]bool),
+		userGroups: make(map[string][]string),
+	}
+}
+
+// Thêm connection mới
+func (m *WSManager) AddClient(c *Client) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.users[c.UserID] = append(m.users[c.UserID], c)
+	if c.GroupID != "" {
+		if _, ok := m.groups[c.GroupID]; !ok {
+			m.groups[c.GroupID] = make(map[string]bool)
+		}
+		m.groups[c.GroupID][c.UserID] = true
+	}
+}
+
+// Xóa connection
+func (m *WSManager) RemoveClient(c *Client) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	conns := m.users[c.UserID]
+	newConns := []*Client{}
+
+	for _, conn := range conns {
+		if conn != c {
+			newConns = append(newConns, conn)
+		}
+	}
+
+	// Cập nhật lại danh sách tab/connection của user
+	if len(newConns) == 0 {
+		delete(m.users, c.UserID)
+	} else {
+		m.users[c.UserID] = newConns
+	}
+
+	// Xử lý group
+	if c.GroupID != "" {
+		stillInGroup := false
+		for _, conn := range newConns {
+			if conn.GroupID == c.GroupID {
+				stillInGroup = true
+				break
+			}
+		}
+
+		// Nếu user không còn tab nào thuộc group này
+		if !stillInGroup {
+			delete(m.groups[c.GroupID], c.UserID)
+			if len(m.groups[c.GroupID]) == 0 {
+				delete(m.groups, c.GroupID)
+			}
+		}
+	}
+}
+
+// Lấy group mà user đang active (tab có group)
+func (m *WSManager) GetActiveGroupOfUser(userID string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for groupID, users := range m.groups {
+		if users[userID] {
+			return groupID
+		}
+	}
+	return ""
+}
+
+// Broadcast vị trí tới tất cả user active trong group
+func (m *WSManager) BroadcastLocation(senderUserID string, groupIDs []string, data interface{}) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, groupID := range groupIDs {
+		userIDs, ok := m.groups[groupID]
+		if !ok {
+			continue
+		}
+		for userID := range userIDs {
+			// if userID == senderUserID {
+			// 	continue
+			// }
+			conns := m.users[userID]
+			for _, c := range conns {
+				if c.GroupID == groupID {
+					_ = c.Conn.WriteJSON(data)
+				}
+			}
+		}
+	}
+}
+
+// Cập nhật cache userGroups (từ DB)
+// SetUserGroups cache groupIDs của user
+func (m *WSManager) SetUserGroups(userID string, groupIDs []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.userGroups[userID] = groupIDs
+}
+
+// Lấy cache group của user
+func (m *WSManager) GetUserGroups(userID string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.userGroups[userID]
+}

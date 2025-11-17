@@ -1,0 +1,26 @@
+package ws
+
+import (
+	"context"
+
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/mongo"
+)
+
+type LocationUsecase struct {
+	DB mongo.Database
+}
+
+func NewLocationUsecase(db mongo.Database) *LocationUsecase {
+	return &LocationUsecase{DB: db}
+}
+
+// SaveLocation: ghi vị trí vào Mongo
+func (u *LocationUsecase) SaveLocation(groupID, userID string, data map[string]interface{}) error {
+	col := u.DB.Collection("locations")
+	_, err := col.InsertOne(context.Background(), map[string]interface{}{
+		"group_id": groupID,
+		"user_id":  userID,
+		"data":     data,
+	})
+	return err
+}
