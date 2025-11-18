@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"time"
 
 	route "github.com/Storm-Watch-Platform/Storm_Watch_Backend/api/route"
@@ -26,13 +25,5 @@ func main() {
 
 	route.Setup(env, timeout, db, gin)
 
-	// gin.Run(env.ServerAddress)
-	// Railway cung cấp port runtime qua env variable PORT
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080" // fallback khi chạy local
-	}
-
-	// Gin listen đúng port
-	gin.Run(":" + port)
+	gin.Run(env.ServerAddress)
 }

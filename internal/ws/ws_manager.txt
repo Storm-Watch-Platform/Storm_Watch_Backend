@@ -1,25 +1,33 @@
 package ws
 
 import (
-	"encoding/json"
 	"sync"
 
-	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/eventbus"
 	"github.com/gorilla/websocket"
 )
 
+// Client đại diện 1 connection/tab
 type Client struct {
-	Conn          *websocket.Conn
-	UserID        string
+	Conn         *websocket.Conn
+	UserID       string
+	IsBackground bool
+	// subscribed targets (set of userID being followed)
 	Subscriptions map[string]bool
 }
 
+// WSManager quản lý tất cả client & follow/subscription
 type WSManager struct {
-	mu    sync.RWMutex
+	mu sync.RWMutex
+
+	// userID -> list of connections (all tabs)
 	users map[string][]*Client
-	temp  []*Client
+
+	// temp clients chưa CONNECT
+	temp []*Client
 }
 
+// Khởi tạo WSManager
 func NewWSManager() *WSManager {
 	return &WSManager{
 		users: make(map[string][]*Client),
@@ -27,16 +35,22 @@ func NewWSManager() *WSManager {
 	}
 }
 
+// tạm lưu client chưa CONNECT
 func (m *WSManager) AddTempClient(c *Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.temp = append(m.temp, c)
 }
 
+// promote client sau CONNECT frame
 func (m *WSManager) PromoteTempClient(c *Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// add to real user map
 	m.users[c.UserID] = append(m.users[c.UserID], c)
+
+	// remove from temp
 	for i, t := range m.temp {
 		if t == c {
 			m.temp = append(m.temp[:i], m.temp[i+1:]...)
@@ -45,9 +59,12 @@ func (m *WSManager) PromoteTempClient(c *Client) {
 	}
 }
 
+// Remove client khi tab đóng hoặc lỗi
 func (m *WSManager) RemoveClient(c *Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// remove khỏi user map
 	if list, ok := m.users[c.UserID]; ok {
 		newList := []*Client{}
 		for _, cc := range list {
@@ -61,6 +78,8 @@ func (m *WSManager) RemoveClient(c *Client) {
 			m.users[c.UserID] = newList
 		}
 	}
+
+	// remove khỏi temp
 	for i, t := range m.temp {
 		if t == c {
 			m.temp = append(m.temp[:i], m.temp[i+1:]...)
@@ -69,39 +88,62 @@ func (m *WSManager) RemoveClient(c *Client) {
 	}
 }
 
+// SUBSCRIBE target
 func (m *WSManager) Subscribe(c *Client, targetUserID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if c.Subscriptions == nil {
 		c.Subscriptions = make(map[string]bool)
 	}
+
 	c.Subscriptions[targetUserID] = true
 }
 
+// UNSUBSCRIBE target
 func (m *WSManager) Unsubscribe(c *Client, targetUserID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if c.Subscriptions != nil {
 		delete(c.Subscriptions, targetUserID)
 	}
 }
 
-// ----------------------------
-// Broadcast Location object
-// ----------------------------
-func (m *WSManager) BroadcastLocation(userID string, loc *domain.Location) {
+// B gửi vị trí → push tới tất cả client subscribe B
+func (m *WSManager) SendLocationFromUser(targetUserID string, body string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	data, err := json.Marshal(loc)
-	if err != nil {
-		return // nếu marshal lỗi thì bỏ
-	}
-
 	for _, clients := range m.users {
 		for _, c := range clients {
-			if c.Subscriptions != nil && c.Subscriptions[userID] {
-				msg := "MESSAGE\ncontent-type:application/json\n\n" + string(data) + "\x00"
+			if c.Subscriptions != nil && c.Subscriptions[targetUserID] {
+				// gửi STOMP MESSAGE frame
+				msg := "MESSAGE\n" +
+					"content-type:application/json\n\n" +
+					body + "\x00"
+
+				c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
+			}
+		}
+	}
+}
+
+// Lấy tất cả connection của user
+func (m *WSManager) GetClients(userID string) []*Client {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.users[userID]
+}
+
+// WSManager.go
+func (m *WSManager) HandleEvent(evt eventbus.Event) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, clients := range m.users {
+		for _, c := range clients {
+			if c.Subscriptions != nil && c.Subscriptions[evt.User] {
+				msg := "MESSAGE\ncontent-type:application/json\n\n" + evt.Body + "\x00"
 				c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
 			}
 		}

@@ -1,0 +1,38 @@
+package usecase
+
+import (
+	"context"
+	"time"
+
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+)
+
+type AIUseCase struct {
+	reportRepo domain.ReportRepository
+	aiService  AISystem
+}
+
+func NewAIUseCase(repo domain.ReportRepository, ai AISystem) *AIUseCase {
+	return &AIUseCase{reportRepo: repo, aiService: ai}
+}
+
+func (uc *AIUseCase) EnrichReport(ctx context.Context, reportID string) error {
+
+	// 1. Lấy report thô
+	rp, err := uc.reportRepo.GetByID(ctx, reportID)
+	if err != nil {
+		return err
+	}
+
+	// 2. Gọi AI (hardcode trước)
+	enrich, err := uc.aiService.ProcessReport(rp)
+	if err != nil {
+		return err
+	}
+
+	enrich.ExtractedAt = time.Now().UnixMilli()
+
+	// 3. Cập nhật DB
+	err = uc.reportRepo.UpdateEnrichment(ctx, reportID, enrich)
+	return err
+}

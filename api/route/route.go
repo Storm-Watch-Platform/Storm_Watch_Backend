@@ -31,5 +31,5 @@ func Setup(env *bootstrap.Env, timeout time.Duration, db mongo.Database, gin *gi
 	// --- Thêm WebSocket route vào cùng hàm Setup ---
 	// NewWSRouter(env, timeout, db, protectedRouter)
 
-	NewWSRouter(env, timeout, publicRouter)
+	NewWSRouter(env, timeout, db, publicRouter)
 }
