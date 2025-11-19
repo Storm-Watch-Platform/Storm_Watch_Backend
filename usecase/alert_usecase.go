@@ -91,3 +91,8 @@ func (uc *AlertUseCase) Resolve(client *ws.Client, alertID string) error {
 
 	return nil
 }
+
+// Lấy alert gần
+func (uc *AlertUseCase) GetNearbyAlerts(ctx context.Context, lat, lon, km float64) ([]*domain.Alert, error) {
+	return uc.Repo.GetNearbyAlerts(ctx, lat, lon, km)
+}

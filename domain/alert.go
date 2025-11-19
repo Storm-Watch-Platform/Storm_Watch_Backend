@@ -26,6 +26,7 @@ type AlertRepository interface {
 	UpdateStatus(ctx context.Context, alertID string, status string) error
 	FetchByID(ctx context.Context, alertID string) (*Alert, error)
 	FetchByRadius(ctx context.Context, lat, lng, km float64) ([]Alert, error)
+	GetNearbyAlerts(ctx context.Context, lat, lon, km float64) ([]*Alert, error)
 }
 
 type AlertUsecase interface {

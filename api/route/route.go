@@ -32,4 +32,11 @@ func Setup(env *bootstrap.Env, timeout time.Duration, db mongo.Database, gin *gi
 	// NewWSRouter(env, timeout, db, protectedRouter)
 
 	NewWSRouter(env, timeout, db, publicRouter)
+
+	// --- Thêm các route lấy thông tin gần đó ---
+	NewNearbyRouter(env, timeout, db, publicRouter)
+
+	// --- Thêm các route lấy thông tin thống kê ---
+	// NewReportMockRouter(env, timeout, db, publicRouter)
+	// NewAlertMockRouter(env, timeout, db, publicRouter)
 }

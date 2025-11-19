@@ -73,3 +73,8 @@ func (uc *ReportUseCase) Handle(userID string, r *domain.Report) error {
 
 	return nil
 }
+
+// Lấy report gần
+func (uc *ReportUseCase) GetNearbyReports(ctx context.Context, lat, lon, km float64) ([]*domain.Report, error) {
+	return uc.repo.GetNearbyReports(ctx, lat, lon, km)
+}

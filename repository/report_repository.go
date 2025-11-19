@@ -48,3 +48,36 @@ func (r *reportRepository) UpdateAI(ctx context.Context, reportID string, enrich
 	)
 	return err
 }
+
+// ---------- repository/report_repository.go ----------
+func (r *reportRepository) GetNearbyReports(ctx context.Context, lat, lon, km float64) ([]*domain.Report, error) {
+	collection := r.db.Collection(r.collection)
+
+	filter := bson.M{
+		"location": bson.M{
+			"$near": bson.M{
+				"$geometry": bson.M{
+					"type":        "Point",
+					"coordinates": []float64{lon, lat}, // [lon, lat]
+				},
+				"$maxDistance": km * 1000, // km -> meters
+			},
+		},
+	}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var reports []*domain.Report
+	for cursor.Next(ctx) {
+		var rep domain.Report
+		if err := cursor.Decode(&rep); err != nil {
+			return nil, err
+		}
+		reports = append(reports, &rep)
+	}
+	return reports, nil
+}

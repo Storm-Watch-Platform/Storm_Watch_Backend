@@ -31,6 +31,7 @@ type ReportEnrichment struct {
 
 type ReportRepository interface {
 	Create(ctx context.Context, report *Report) error
+	GetNearbyReports(ctx context.Context, lat, lon, km float64) ([]*Report, error)
 	// FetchByGroupID(ctx context.Context, groupID string) ([]Report, error)
 }
 
@@ -40,5 +41,6 @@ type ReportUser struct {
 
 type ReportUsecase interface {
 	Send(ctx context.Context, report *Report) error
+	GetNearbyReports(ctx context.Context, lat, lon, km float64) ([]*Report, error)
 	// FetchByGroupID(ctx context.Context, groupID string) ([]Report, error)
 }
