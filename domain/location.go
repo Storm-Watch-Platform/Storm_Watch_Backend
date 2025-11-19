@@ -21,4 +21,5 @@ const CollectionLocation = "locations"
 type LocationRepository interface {
 	Upsert(ctx context.Context, loc *Location) error
 	GetByUserID(ctx context.Context, userID string) (*Location, error)
+	GetNearbyUserIDs(ctx context.Context, lat, lon, km float64) ([]string, error)
 }

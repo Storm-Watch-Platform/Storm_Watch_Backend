@@ -130,3 +130,28 @@ func (w *WSManager) SendToClient(c *Client, destination string, payload interfac
 
 	return c.Conn.WriteMessage(websocket.TextMessage, []byte(frame))
 }
+
+func (m *WSManager) BroadcastSOS(userIDs []string, alert *domain.Alert) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	data, err := json.Marshal(alert)
+	if err != nil {
+		return
+	}
+
+	for _, uid := range userIDs {
+		clients, ok := m.users[uid]
+		if !ok {
+			continue
+		}
+		for _, c := range clients {
+			frame := "SEND\n" +
+				"destination:/user/" + c.UserID + "/alert_broadcast\n" +
+				"content-type:application/json\n\n" +
+				string(data) + "\x00"
+
+			c.Conn.WriteMessage(websocket.TextMessage, []byte(frame))
+		}
+	}
+}

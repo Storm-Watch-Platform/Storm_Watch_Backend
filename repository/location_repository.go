@@ -52,3 +52,39 @@ func (r *locationRepository) GetByUserID(ctx context.Context, userID string) (*d
 
 	return &loc, err
 }
+
+func (r *locationRepository) GetNearbyUserIDs(ctx context.Context, lat, lon, km float64) ([]string, error) {
+	collection := r.database.Collection(domain.CollectionLocation)
+
+	filter := bson.M{
+		"location": bson.M{
+			"$near": bson.M{
+				"$geometry": bson.M{
+					"type":        "Point",
+					"coordinates": []float64{lon, lat},
+				},
+				"$maxDistance": km * 1000, // km -> meters
+			},
+		},
+	}
+
+	// chỉ lấy field _id
+	opts := options.Find().SetProjection(bson.M{"_id": 1})
+	cursor, err := collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var ids []string
+	for cursor.Next(ctx) {
+		var doc struct {
+			ID string `bson:"_id"`
+		}
+		if err := cursor.Decode(&doc); err != nil {
+			return nil, err
+		}
+		ids = append(ids, doc.ID)
+	}
+	return ids, nil
+}

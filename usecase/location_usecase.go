@@ -34,7 +34,6 @@ func NewLocationUC(q *worker.PriorityQueue, wsm *ws.WSManager, repo domain.Locat
 }
 
 func (uc *LocationUseCase) Handle(userID string, loc *domain.Location) error {
-	println("VAO HAM HANDLE CUA LOCATION USECASE")
 	if !allowedStatus[loc.Status] {
 		return errors.New("invalid status")
 	}
@@ -42,7 +41,6 @@ func (uc *LocationUseCase) Handle(userID string, loc *domain.Location) error {
 	loc.ID = userID // _id = userID
 	loc.UpdatedAt = time.Now().Unix()
 
-	println("PUSH VÔ QUEUE")
 	// push job vào worker queue
 	uc.queue.Push(worker.Job{
 		Priority: 1, // hoặc 0 tùy bạn muốn
@@ -59,4 +57,9 @@ func (uc *LocationUseCase) Handle(userID string, loc *domain.Location) error {
 	})
 
 	return nil
+}
+
+// Lấy tất cả userID trong bán kính km
+func (uc *LocationUseCase) GetNearbyUserIDs(ctx context.Context, lat, lon, km float64) ([]string, error) {
+	return uc.repo.GetNearbyUserIDs(ctx, lat, lon, km)
 }

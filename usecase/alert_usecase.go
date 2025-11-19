@@ -11,18 +11,20 @@ import (
 )
 
 type AlertUseCase struct {
-	Repo      domain.AlertRepository
-	WSManager *ws.WSManager
-	Queue     *worker.PriorityQueue
-	Timeout   time.Duration
+	Repo       domain.AlertRepository
+	WSManager  *ws.WSManager
+	LocationUC *LocationUseCase
+	Queue      *worker.PriorityQueue
+	Timeout    time.Duration
 }
 
-func NewAlertUC(queue *worker.PriorityQueue, wsManager *ws.WSManager, repo domain.AlertRepository, timeout time.Duration) *AlertUseCase {
+func NewAlertUC(queue *worker.PriorityQueue, wsManager *ws.WSManager, repo domain.AlertRepository, locUC *LocationUseCase, timeout time.Duration) *AlertUseCase {
 	return &AlertUseCase{
-		Repo:      repo,
-		WSManager: wsManager,
-		Queue:     queue,
-		Timeout:   timeout,
+		Repo:       repo,
+		WSManager:  wsManager,
+		LocationUC: locUC,
+		Queue:      queue,
+		Timeout:    timeout,
 	}
 }
 
@@ -48,6 +50,20 @@ func (uc *AlertUseCase) Handle(c *ws.Client, alert *domain.Alert) error {
 				"expires_at": alert.ExpiresAt.Unix(),
 			}
 			uc.WSManager.SendToClient(c, "alert_response", response)
+
+			// 3️⃣ Lấy userID gần đó từ LocationUseCase
+			userIDs, err := uc.LocationUC.GetNearbyUserIDs(ctx,
+				alert.Location.Coordinates[1], // lat
+				alert.Location.Coordinates[0], // lon
+				alert.RadiusM/1000,            // km
+			)
+			if err != nil {
+				println("Failed to get nearby users:", err.Error())
+				return
+			}
+
+			// 4️⃣ Gọi WSManager để broadcast
+			uc.WSManager.BroadcastSOS(userIDs, alert)
 		},
 	})
 	return nil
