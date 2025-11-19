@@ -107,3 +107,26 @@ func (m *WSManager) BroadcastLocation(userID string, loc *domain.Location) {
 		}
 	}
 }
+
+func (w *WSManager) GetConnByUser(userID string) *websocket.Conn {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	clients, ok := w.users[userID]
+	if !ok || len(clients) == 0 {
+		return nil
+	}
+
+	// trả về connection đầu tiên tạm thời
+	return clients[0].Conn
+}
+
+func (w *WSManager) SendToClient(c *Client, destination string, payload interface{}) error {
+	data, _ := json.Marshal(payload)
+	frame := "SEND\n" +
+		"destination:/user/" + c.UserID + "/" + destination + "\n" +
+		"content-type:application/json\n\n" +
+		string(data) + "\x00"
+
+	return c.Conn.WriteMessage(websocket.TextMessage, []byte(frame))
+}

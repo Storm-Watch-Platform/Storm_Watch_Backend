@@ -1,56 +1,75 @@
 package usecase
 
 import (
+	"context"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/ai"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/ws"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/worker"
 )
 
 type ReportUseCase struct {
-	Repo      domain.ReportRepository
-	WSManager *ws.WSManager
-	Queue     *worker.PriorityQueue
-	Timeout   time.Duration
+	queue   *worker.PriorityQueue
+	aiQueue *worker.AIQueue
+	ws      *ws.WSManager
+	repo    domain.ReportRepository
+	timeout time.Duration
 }
 
-func NewReportUC(queue *worker.PriorityQueue, wsManager *ws.WSManager, repo domain.ReportRepository, timeout time.Duration) *ReportUseCase {
+func NewReportUC(q *worker.PriorityQueue, aiq *worker.AIQueue, wsm *ws.WSManager, repo domain.ReportRepository, timeout time.Duration) *ReportUseCase {
 	return &ReportUseCase{
-		Repo:      repo,
-		WSManager: wsManager,
-		Queue:     queue,
-		Timeout:   timeout,
+		queue:   q,
+		aiQueue: aiq,
+		ws:      wsm,
+		repo:    repo,
+		timeout: timeout,
 	}
 }
 
-// Handle nhận report từ FE
-func (uc *ReportUseCase) Handle(userID string, report *domain.Report) error {
-	id, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return err
-	}
-	report.UserID = id.Hex()
+func (uc *ReportUseCase) Handle(userID string, r *domain.Report) error {
+	r.UserID = userID
+	r.Timestamp = time.Now().Unix() // giống Location
 
-	job := worker.Job{
-		Priority: 1, // priority trung bình
+	// Step 1: save + broadcast in PriorityQueue
+	uc.queue.Push(worker.Job{
+		Priority: 2, // Report > Location
 		Exec: func() {
-			// 1. Lưu report vào DB
-			_ = uc.Repo.Create(nil, report) // context nil tạm thời
+			ctx, cancel := context.WithTimeout(context.Background(), uc.timeout)
+			defer cancel()
 
-			// 2. Hardcode danh sách user nhận broadcast
-			users := []string{"userA", "userB"} // tạm thời
-
-			// 3. Broadcast
-			for _, u := range users {
-				println("Broadcast report to", u)
-				//uc.WSManager.Broadcast(u, report.Message)
-			}
+			// Save report
+			_ = uc.repo.Create(ctx, r)
+			// uc.ws.BroadcastReport(userID, r)
 		},
-	}
+	})
 
-	uc.Queue.Push(job)
+	// Step 2: AI analyze — run in separate AI queue
+	uc.aiQueue.Push(func() {
+		result, _ := ai.AnalyzeReport(r.Detail)
+
+		// Lưu kết quả AI vào report
+		ctx, cancel := context.WithTimeout(context.Background(), uc.timeout)
+		defer cancel()
+
+		r.Enrichment = &domain.ReportEnrichment{
+			Category:    result.Category,
+			Urgency:     result.Urgency,
+			Summary:     result.Summary,
+			Confidence:  result.Confidence,
+			ExtractedAt: time.Now().Unix(),
+		}
+
+		// Update report trong DB với AI result
+		if repoWithUpdate, ok := uc.repo.(interface {
+			UpdateAI(ctx context.Context, reportID string, enrichment *domain.ReportEnrichment) error
+		}); ok {
+			_ = repoWithUpdate.UpdateAI(ctx, r.ID.Hex(), r.Enrichment)
+		}
+
+		// uc.ws.BroadcastAIResult(userID, result)
+	})
+
 	return nil
 }

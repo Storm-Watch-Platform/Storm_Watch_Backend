@@ -15,35 +15,40 @@ import (
 )
 
 func NewWSRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database, group *gin.RouterGroup) {
+
 	// ================== //
-	// PRIORITY QUEUE
+	// 1. PRIORITY QUEUE (core realtime)
 	// ================== //
 	queue := worker.NewPriorityQueue()
-	queue.Start(2) // 2 worker goroutine
+	queue.Start(2) // 2 worker goroutines xử lý realtime job
 
 	// ================== //
-	// WS MANAGER
+	// 2. ASYNC AI QUEUE (không priority)
+	// ================== //
+	aiQueue := worker.NewAIQueue()
+	aiQueue.Start(1) // 1 worker chạy nhẹ thôi
+
+	// ================== //
+	// 3. WS MANAGER
 	// ================== //
 	wsManager := ws.NewWSManager()
-	// danh sách client, quản lý subscribe, broadcast các kiểu
 
 	// ================== //
-	// REPOSITORIES
+	// 4. REPOSITORIES
 	// ================== //
 	locRepo := repository.NewLocationRepo(db, domain.CollectionLocation)
 	alertRepo := repository.NewAlertRepo(db, domain.CollectionAlert)
 	reportRepo := repository.NewReportRepo(db, domain.CollectionReport)
-	// database cho loc, alert, report
 
 	// ================== //
-	// USE CASES
+	// 5. USE CASES
 	// ================== //
 	locUC := usecase.NewLocationUC(queue, wsManager, locRepo, timeout)
 	alertUC := usecase.NewAlertUC(queue, wsManager, alertRepo, timeout)
-	reportUC := usecase.NewReportUC(queue, wsManager, reportRepo, timeout)
+	reportUC := usecase.NewReportUC(queue, aiQueue, wsManager, reportRepo, timeout)
 
 	// ================== //
-	// CONTROLLER
+	// 6. CONTROLLER
 	// ================== //
 	c := &controller.WSController{
 		WSManager:  wsManager,
@@ -53,7 +58,7 @@ func NewWSRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database, g
 	}
 
 	// ================== //
-	// ROUTE
+	// 7. ROUTE
 	// ================== //
 	group.GET("/ws", c.HandleWS)
 }

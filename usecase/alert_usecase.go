@@ -27,36 +27,51 @@ func NewAlertUC(queue *worker.PriorityQueue, wsManager *ws.WSManager, repo domai
 }
 
 // Handle nhận alert từ FE
-func (uc *AlertUseCase) Handle(userID string, alert *domain.Alert) error {
-	alert.UserID = userID
-
-	job := worker.Job{
-		Priority: 2, // ưu tiên cao
+func (uc *AlertUseCase) Handle(c *ws.Client, alert *domain.Alert) error {
+	alert.UserID = c.UserID
+	// ... tạo job
+	uc.Queue.Push(worker.Job{
+		Priority: 20,
 		Exec: func() {
 			ctx, cancel := context.WithTimeout(context.Background(), uc.Timeout)
 			defer cancel()
 
-			// 1. Lưu alert vào DB
 			if err := uc.Repo.Create(ctx, alert); err != nil {
-				// có thể log lỗi
+				println("Failed to save alert:", err.Error())
 				return
 			}
 
-			// 2. Lấy danh sách alert trong bán kính 2 km (hardcode tạm hoặc dùng repo)
-			// Lúc sau sẽ thay bằng query MongoDB
-			users, err := uc.Repo.FetchByRadius(ctx, alert.Lat, alert.Lng, 2.0)
-			if err != nil {
-				return
+			// gửi về tab hiện tại
+			response := map[string]interface{}{
+				"status":     "ok",
+				"alertId":    alert.ID.Hex(),
+				"expires_at": alert.ExpiresAt.Unix(),
 			}
-
-			// 3. Broadcast tới WSManager
-			for _, u := range users {
-				println(u.UserID)
-				//uc.WSManager.Broadcast(u.UserID, alert.Body)
-			}
+			uc.WSManager.SendToClient(c, "alert_response", response)
 		},
+	})
+	return nil
+}
+
+func (uc *AlertUseCase) Resolve(client *ws.Client, alertID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), uc.Timeout)
+	defer cancel()
+
+	// 1. Update status trong DB
+	err := uc.Repo.UpdateStatus(ctx, alertID, "RESOLVED")
+	if err != nil {
+		return err
 	}
 
-	uc.Queue.Push(job)
+	// 2. Chuẩn bị response gửi về FE
+	response := map[string]interface{}{
+		"status":    "ok",
+		"alertId":   alertID,
+		"newStatus": "RESOLVED",
+	}
+
+	// 3. Gửi về WS của chính client
+	uc.WSManager.SendToClient(client, "alert_resolved", response)
+
 	return nil
 }

@@ -2,10 +2,10 @@
 package controller
 
 import (
-	"bufio"
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/ws"
@@ -76,13 +76,49 @@ func (c *WSController) handleFrames(client *ws.Client) {
 			msgType := frame.Headers["type"]
 			switch msgType {
 			case "alert":
-				var alert domain.Alert
-				err := json.Unmarshal([]byte(frame.Body), &alert)
-				if err != nil {
-					// handle lỗi
+				var body struct {
+					Action     string  `json:"action"`     // "raise" hoặc "resolve"
+					AlertID    string  `json:"alertId"`    // dùng khi resolve
+					Body       string  `json:"body"`       // dùng khi raise
+					Lat        float64 `json:"lat"`        // dùng khi raise
+					Lon        float64 `json:"lon"`        // dùng khi raise
+					RadiusM    float64 `json:"radius_m"`   // dùng khi raise
+					TTLMin     int     `json:"ttl_min"`    // dùng khi raise
+					Visibility string  `json:"visibility"` // dùng khi raise
+				}
+
+				if err := json.Unmarshal([]byte(frame.Body), &body); err != nil {
+					println("Cannot unmarshal alert frame:", err.Error())
 					break
 				}
-				c.AlertUC.Handle(client.UserID, &alert)
+
+				switch body.Action {
+				case "raise":
+					alert := &domain.Alert{
+						UserID: client.UserID,
+						Body:   body.Body,
+						Location: domain.GeoPoint{
+							Type:        "Point",
+							Coordinates: [2]float64{body.Lon, body.Lat},
+						},
+						RadiusM:    body.RadiusM,
+						TTLMin:     body.TTLMin,
+						ExpiresAt:  time.Now().Add(time.Duration(body.TTLMin) * time.Minute),
+						Visibility: body.Visibility,
+					}
+					c.AlertUC.Handle(client, alert)
+
+				case "resolve":
+					if body.AlertID == "" {
+						println("Missing alertId for resolve")
+						break
+					}
+
+					err := c.AlertUC.Resolve(client, body.AlertID)
+					if err != nil {
+						println("Failed to resolve alert:", err.Error())
+					}
+				}
 			case "location":
 				var body struct {
 					Lat       float64 `json:"Lat"`
@@ -110,13 +146,34 @@ func (c *WSController) handleFrames(client *ws.Client) {
 				c.LocationUC.Handle(client.UserID, loc)
 
 			case "report":
-				var report domain.Report
-				err := json.Unmarshal([]byte(frame.Body), &report)
-				if err != nil {
+				var body struct {
+					Type        string  `json:"type"`
+					Detail      string  `json:"detail"`
+					Description string  `json:"description"`
+					Image       string  `json:"image"`
+					Lat         float64 `json:"lat"`
+					Lon         float64 `json:"lon"`
+					Timestamp   int64   `json:"timestamp"`
+				}
+
+				if err := json.Unmarshal([]byte(frame.Body), &body); err != nil {
 					break
 				}
-				c.ReportUC.Handle(client.UserID, &report)
 
+				report := &domain.Report{
+					UserID:      client.UserID,
+					Type:        body.Type,
+					Detail:      body.Detail,
+					Description: body.Description,
+					Image:       body.Image,
+					Timestamp:   body.Timestamp,
+					Location: domain.GeoPoint{
+						Type:        "Point",
+						Coordinates: [2]float64{body.Lon, body.Lat},
+					},
+				}
+
+				c.ReportUC.Handle(client.UserID, report)
 			}
 		}
 	}
@@ -128,26 +185,46 @@ type StompFrame struct {
 	Body    string
 }
 
+// func parseFrame(raw string) StompFrame {
+// 	print("PARSE FRAME RAW:", raw)
+// 	sc := bufio.NewScanner(strings.NewReader(raw))
+// 	f := StompFrame{Headers: map[string]string{}}
+// 	if sc.Scan() {
+// 		f.Command = sc.Text()
+// 	}
+// 	for sc.Scan() {
+// 		line := sc.Text()
+// 		if line == "" {
+// 			break
+// 		}
+// 		kv := strings.SplitN(line, ":", 2)
+// 		if len(kv) == 2 {
+// 			f.Headers[kv[0]] = kv[1]
+// 		}
+// 	}
+// 	body := ""
+// 	for sc.Scan() {
+// 		body += sc.Text()
+// 	}
+// 	f.Body = strings.TrimSuffix(body, "\x00")
+
+// 	print("PARSED FRAME:", body)
+// 	return f
+// }
+
 func parseFrame(raw string) StompFrame {
-	sc := bufio.NewScanner(strings.NewReader(raw))
 	f := StompFrame{Headers: map[string]string{}}
-	if sc.Scan() {
-		f.Command = sc.Text()
-	}
-	for sc.Scan() {
-		line := sc.Text()
-		if line == "" {
-			break
-		}
+	parts := strings.SplitN(raw, "\n\n", 2)
+	headerLines := strings.Split(parts[0], "\n")
+	f.Command = headerLines[0]
+	for _, line := range headerLines[1:] {
 		kv := strings.SplitN(line, ":", 2)
 		if len(kv) == 2 {
 			f.Headers[kv[0]] = kv[1]
 		}
 	}
-	body := ""
-	for sc.Scan() {
-		body += sc.Text()
+	if len(parts) > 1 {
+		f.Body = strings.TrimSuffix(parts[1], "\x00")
 	}
-	f.Body = strings.TrimSuffix(body, "\x00")
 	return f
 }

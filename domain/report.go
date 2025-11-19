@@ -2,25 +2,25 @@ package domain
 
 import (
 	"context"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const CollectionReport = "reports"
 
 type Report struct {
-	ID          string   `bson:"_id" json:"id"`
-	UserID      string   `bson:"user_id" json:"user_id"`
-	Type        string   `bson:"type" json:"type"`
-	Detail      string   `bson:"detail" json:"detail"`
-	Description string   `bson:"description" json:"description"`
-	Image       string   `bson:"image" json:"image"`
-	Location    GeoPoint `bson:"location" json:"location"`
-	Timestamp   int64    `bson:"timestamp" json:"timestamp"`
-	Status      string   `bson:"status" json:"status"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID      string             `bson:"user_id" json:"user_id"`
+	Type        string             `bson:"type" json:"type"`
+	Detail      string             `bson:"detail" json:"detail"`
+	Description string             `bson:"description" json:"description"`
+	Image       string             `bson:"image,omitempty" json:"image,omitempty"` // Base64
+	Location    GeoPoint           `bson:"location" json:"location"`
 
-	// AI OUTPUT
+	Timestamp  int64             `bson:"timestamp" json:"timestamp"`
+	Status     string            `bson:"status" json:"status"`
 	Enrichment *ReportEnrichment `bson:"enrichment,omitempty" json:"enrichment,omitempty"`
 }
-
 type ReportEnrichment struct {
 	Category    string `bson:"category" json:"category"`         // “flood”, “fire”, “accident”...
 	Urgency     string `bson:"urgency" json:"urgency"`           // “LOW”, “MEDIUM”, “HIGH”
