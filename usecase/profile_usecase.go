@@ -28,5 +28,5 @@ func (pu *profileUsecase) GetProfileByID(c context.Context, userID string) (*dom
 		return nil, err
 	}
 
-	return &domain.Profile{Name: user.Name, Phone: user.Phone}, nil
+	return &domain.Profile{Name: user.Name, Phone: user.Phone, ID: user.ID.Hex()}, nil
 }
