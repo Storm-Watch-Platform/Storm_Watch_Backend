@@ -22,6 +22,7 @@ type CreateReportRequest struct {
 	Lon         float64 `json:"lon"`
 }
 
+// thêm urgency, incident_type, confidence vào response
 func (h *ReportHandler) Create(c *gin.Context) {
 	var in CreateReportRequest
 	if err := c.ShouldBindJSON(&in); err != nil {

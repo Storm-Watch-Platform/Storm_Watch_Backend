@@ -4,8 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"your/module/path/backend/internal/realtime"
-
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/realtime"
 	"github.com/gin-gonic/gin"
 )
 
