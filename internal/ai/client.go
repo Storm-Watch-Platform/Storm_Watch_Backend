@@ -17,9 +17,9 @@ type Client struct {
 func New() (*Client, error) {
 	base := os.Getenv("AI_SERVICE_BASE_URL")
 	if base == "" {
-		base = "http://ai-service:8001"
+		base = "http://localhost:8001"
 	}
-	httpc := &http.Client{Timeout: 3 * time.Second}
+	httpc := &http.Client{Timeout: 30 * time.Second}
 	c, err := aiclient.NewClientWithResponses(base, aiclient.WithHTTPClient(httpc))
 	if err != nil {
 		return nil, err
@@ -28,16 +28,26 @@ func New() (*Client, error) {
 }
 
 func (cli *Client) ClassifyHazardText(ctx context.Context, text string) (urg, itype string, conf float64, err error) {
+	println("???????? AI call start") // log bắt đầu
+
 	req := aiclient.PostClassifyHazardTextJSONRequestBody{Text: text}
 	resp, err := cli.c.PostClassifyHazardTextWithResponse(ctx, req)
 	if err != nil {
+		println("!!!!!!!! AI call error:", err.Error())
 		return "", "", 0, err
 	}
+
+	// Log toàn bộ response: serialize thành string
+	println("DEBUG AI response: ", fmt.Sprintf("%+v", resp))
+
 	if resp.JSON200 == nil {
+		println("!!!!!!!! AI bad response, status:", resp.StatusCode())
 		return "", "", 0, fmt.Errorf("ai-service bad response: %d", resp.StatusCode())
 	}
-	return string(resp.JSON200.Urgency), resp.JSON200.IncidentType, float64(resp.JSON200.Confidence), nil
 
+	println("DEBUG AI JSON200: ", fmt.Sprintf("%+v", resp.JSON200))
+
+	return string(resp.JSON200.Urgency), resp.JSON200.IncidentType, float64(resp.JSON200.Confidence), nil
 }
 
 func (cli *Client) PresenceUpdate(ctx context.Context, lat, lon, acc *float64, status string) (displayUntil string, err error) {

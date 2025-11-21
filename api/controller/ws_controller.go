@@ -173,7 +173,7 @@ func (c *WSController) handleFrames(client *ws.Client) {
 					},
 				}
 
-				c.ReportUC.Handle(client.UserID, report)
+				c.ReportUC.Handle(client, report)
 			}
 		}
 	}

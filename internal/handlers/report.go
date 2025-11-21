@@ -8,10 +8,10 @@ import (
 )
 
 type ReportHandler struct {
-	AI aiClient // interface để mock test
+	AI AIClient // interface để mock test
 }
 
-type aiClient interface {
+type AIClient interface {
 	ClassifyHazardText(ctx context.Context, text string) (urg, itype string, conf float64, err error)
 }
 

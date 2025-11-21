@@ -54,8 +54,11 @@ TYP_PATH = ROOT / "models" / "type_clf.pkl"
 
 def try_load(path: Path):
     try:
-        return joblib.load(path)
-    except Exception:
+        model = joblib.load(path)
+        print(f"Loaded model from {path}")
+        return model
+    except Exception as e:
+        print(f"Failed to load {path}: {e}")
         return None
 
 urgency_model = try_load(URG_PATH)
