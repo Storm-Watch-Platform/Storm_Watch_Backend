@@ -39,4 +39,6 @@ func Setup(env *bootstrap.Env, timeout time.Duration, db mongo.Database, gin *gi
 	// --- Thêm các route lấy thông tin thống kê ---
 	// NewReportMockRouter(env, timeout, db, publicRouter)
 	// NewAlertMockRouter(env, timeout, db, publicRouter)
+
+	NewZoneRouter(env, timeout, db, publicRouter)
 }
