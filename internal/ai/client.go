@@ -28,24 +28,16 @@ func New() (*Client, error) {
 }
 
 func (cli *Client) ClassifyHazardText(ctx context.Context, text string) (urg, itype string, conf float64, err error) {
-	println("???????? AI call start") // log bắt đầu
 
 	req := aiclient.PostClassifyHazardTextJSONRequestBody{Text: text}
 	resp, err := cli.c.PostClassifyHazardTextWithResponse(ctx, req)
 	if err != nil {
-		println("!!!!!!!! AI call error:", err.Error())
 		return "", "", 0, err
 	}
 
-	// Log toàn bộ response: serialize thành string
-	println("DEBUG AI response: ", fmt.Sprintf("%+v", resp))
-
 	if resp.JSON200 == nil {
-		println("!!!!!!!! AI bad response, status:", resp.StatusCode())
 		return "", "", 0, fmt.Errorf("ai-service bad response: %d", resp.StatusCode())
 	}
-
-	println("DEBUG AI JSON200: ", fmt.Sprintf("%+v", resp.JSON200))
 
 	return string(resp.JSON200.Urgency), resp.JSON200.IncidentType, float64(resp.JSON200.Confidence), nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/ai"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/internal/ws"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/worker"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ReportUseCase struct {
@@ -38,7 +39,14 @@ func NewReportUC(q *worker.PriorityQueue, aiq *worker.AIQueue, wsm *ws.WSManager
 
 func (uc *ReportUseCase) Handle(client *ws.Client, r *domain.Report) error {
 	r.UserID = client.UserID
-	r.Timestamp = time.Now().Unix() // giống Location
+	if r.Timestamp == 0 {
+		r.Timestamp = time.Now().Unix()
+	}
+
+	// ✅ Nếu chưa có ID, tạo mới
+	if r.ID.IsZero() {
+		r.ID = primitive.NewObjectID()
+	}
 
 	// Step 1: save + broadcast in PriorityQueue
 	uc.queue.Push(worker.Job{
@@ -62,6 +70,7 @@ func (uc *ReportUseCase) Handle(client *ws.Client, r *domain.Report) error {
 		// Nối các trường làm input cho AI
 		inputText := r.Type + " " + r.Detail + " " + r.Description
 
+		// print("AI INPUT TEXT: ", r.ID.Hex())
 		// Gọi AI client mới
 		urgency, category, confidence, err := uc.AI.ClassifyHazardText(ctx, inputText)
 

@@ -38,7 +38,7 @@ func (q *AIQueue) Start(workerCount int) {
 			for {
 				job := q.Pop()
 				if job != nil {
-					print("AI WORKER EXECUTING JOB")
+					// print("AI WORKER EXECUTING JOB")
 					job()
 				}
 			}

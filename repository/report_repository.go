@@ -8,6 +8,7 @@ import (
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/mongo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type reportRepository struct {
@@ -20,32 +21,41 @@ func NewReportRepo(db mongo.Database, col string) domain.ReportRepository {
 	return &reportRepository{db: db, collection: col}
 }
 
-// Create lưu report vào MongoDB
+// Create lưu report vào MongoDB nếu chưa tồn tại (upsert)
 func (r *reportRepository) Create(ctx context.Context, rep *domain.Report) error {
-	coll := r.db.Collection(r.collection)
-
 	if rep.Timestamp == 0 {
 		rep.Timestamp = time.Now().Unix()
 	}
 
-	// rep.Image là Base64 string, lưu trực tiếp vào DB
-	_, err := coll.InsertOne(ctx, rep)
+	if rep.ID.IsZero() {
+		rep.ID = primitive.NewObjectID()
+	}
+
+	coll := r.db.Collection(r.collection)
+
+	// Upsert: nếu _id đã tồn tại thì bỏ qua, chưa có thì insert
+	filter := bson.M{"_id": rep.ID}
+	update := bson.M{"$setOnInsert": rep} // chỉ insert nếu chưa tồn tại
+	opts := options.Update().SetUpsert(true)
+
+	_, err := coll.UpdateOne(ctx, filter, update, opts)
 	return err
 }
 
+// UpdateAI cập nhật enrichment, nếu report chưa tồn tại sẽ tạo mới (upsert)
 func (r *reportRepository) UpdateAI(ctx context.Context, reportID string, enrichment *domain.ReportEnrichment) error {
-	coll := r.db.Collection(r.collection)
-
 	objID, err := primitive.ObjectIDFromHex(reportID)
 	if err != nil {
 		return err
 	}
 
-	_, err = coll.UpdateOne(
-		ctx,
-		bson.M{"_id": objID},
-		bson.M{"$set": bson.M{"enrichment": enrichment}},
-	)
+	coll := r.db.Collection(r.collection)
+
+	filter := bson.M{"_id": objID}
+	update := bson.M{"$set": bson.M{"enrichment": enrichment}}
+	opts := options.Update().SetUpsert(true) // nếu chưa có document thì tạo mới
+
+	_, err = coll.UpdateOne(ctx, filter, update, opts)
 	return err
 }
 
