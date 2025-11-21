@@ -51,6 +51,7 @@ func (lc *LoginController) Login(c *gin.Context) {
 	loginResponse := domain.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		UserID:       user.ID.Hex(),
 	}
 
 	// --- Bước mới: lấy group của user từ DB và cập nhật WSManager ---
