@@ -1,4 +1,3 @@
-# ai-service/ai_service.py
 from __future__ import annotations
 
 import os
@@ -11,9 +10,20 @@ import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
-import os
-CONFIDENCE_MIN = float(os.getenv("CONFIDENCE_MIN", "0.7"))
 
+# ---------------- Config / ENV ----------------
+ROOT = Path(__file__).resolve().parent
+MODEL_DIR = Path(os.getenv("MODEL_DIR", ROOT / "models"))
+URG_PATH = MODEL_DIR / "urgency_clf.pkl"
+TYP_PATH = MODEL_DIR / "type_clf.pkl"
+
+# Ngưỡng "an toàn" sau khi probabilities đã calibrate (Platt/Temp)
+CONFIDENCE_MIN = float(os.getenv("CONFIDENCE_MIN", "0.65"))
+
+_ALLOWED_INCIDENT = {
+    "FLOOD", "RAIN", "LANDSLIDE", "ELECTRIC", "TREE_DOWN",
+    "WIND", "STORM", "OTHER", "UNKNOWN"
+}
 
 # ---------------- Models ----------------
 class HazardReq(BaseModel):
@@ -36,7 +46,7 @@ class PresenceUpdateReq(BaseModel):
         # nếu không có accuracy -> OK; nếu có mà quá tệ thì clip
         if v is None:
             return v
-        return min(v, 5000.0)
+        return min(v, 5000.0)  # 5km trần
 
 class PresenceUpdateResp(BaseModel):
     ok: bool
@@ -56,20 +66,9 @@ class SosRaiseResp(BaseModel):
     radius_m: int
     expires_at: datetime
 
-# --------------- Paths / ENV ---------------
-ROOT = Path(__file__).resolve().parent
-MODEL_DIR = Path(os.getenv("MODEL_DIR", ROOT / "models"))
-URG_PATH = MODEL_DIR / "urgency_clf.pkl"
-TYP_PATH = MODEL_DIR / "type_clf.pkl"
-
-# Ngưỡng "an toàn" sau khi đã calibrate; có thể chỉnh bằng ENV
-CONFIDENCE_MIN = float(os.getenv("CONFIDENCE_MIN", "0.55"))
-
-# Cho incident_type nếu muốn chuẩn hoá label về tập nhỏ
-_ALLOWED_INCIDENT = {
-    "FLOOD", "RAIN", "LANDSLIDE", "ELECTRIC", "TREE_DOWN",
-    "WIND", "STORM", "OTHER", "UNKNOWN"
-}
+# ---------------- Load models in lifespan ----------------
+urgency_model = None
+type_model = None
 
 def _try_load(path: Path):
     try:
@@ -79,10 +78,6 @@ def _try_load(path: Path):
     except Exception as e:
         print(f"[ai-service] Failed to load {path}: {e}")
         return None
-
-# --------------- Lifespan: load/unload models ---------------
-urgency_model = None
-type_model = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -95,83 +90,96 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         # dọn tài nguyên nếu cần
-        urgency_model = None
-        type_model = None
         print("[lifespan] shutdown")
-
+        # (joblib models là in-memory; đặt None để GC)
+        # Không cần đóng file descriptor vì đã load xong.
 app = FastAPI(title="StormSafe AI Service", version="1.1.0", lifespan=lifespan)
 
-# --------------- Health ---------------
-@app.get("/health")
-def health():
-    return {"ok": bool(urgency_model) and bool(type_model)}
-
-# --------------- Helpers ---------------
+# ---------------- Utilities ----------------
 def _final_classes(model) -> list[str]:
-    """Lấy classes_ từ bước cuối của Pipeline (CalibratedClassifierCV).
-    Sử dụng named_steps theo hướng dẫn sklearn Pipeline. """
-    # Nếu là Pipeline: lấy bước cuối (thường đặt tên 'clf')
+    """
+    Lấy classes_ từ estimator cuối của Pipeline/CalibratedClassifierCV.
+    """
     named = getattr(model, "named_steps", None)
     if named and "clf" in named and hasattr(named["clf"], "classes_"):
         return list(named["clf"].classes_)
-    # Thử trực tiếp (một số trường hợp estimator top-level cũng có classes_)
     if hasattr(model, "classes_"):
         return list(model.classes_)
     raise RuntimeError("Cannot resolve classes_ from model")
 
 def _normalize_incident(label: str) -> str:
     lab = (label or "").upper()
-    return lab if lab in _ALLOWED_INCIDENT else ("UNKNOWN" if lab else "UNKNOWN")
+    return lab if lab in _ALLOWED_INCIDENT else "UNKNOWN"
 
-# --------------- Core: classify hazard text ---------------
+# ---------------- Endpoints ----------------
+@app.get("/health")
+def health():
+    return {"ok": bool(urgency_model) and bool(type_model)}
+
 @app.post("/classify/hazard-text", response_model=HazardResp)
 def classify_hazard_text(req: HazardReq):
     if urgency_model is None or type_model is None:
-        # Lifespan chưa load xong hoặc model thiếu → báo 503 đúng chuẩn
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty text")
 
-    # Xác suất đã calibrate (nếu train bằng CalibratedClassifierCV)
-    up = urgency_model.predict_proba([text])[0]  # proba đã hiệu chỉnh
+    # 1) Dự đoán với xác suất đã calibrate (CalibratedClassifierCV)
+    up = urgency_model.predict_proba([text])[0]
     tp = type_model.predict_proba([text])[0]
 
     u_classes = _final_classes(urgency_model)
     t_classes = _final_classes(type_model)
     u_idx, t_idx = int(np.argmax(up)), int(np.argmax(tp))
     u_label = str(u_classes[u_idx]) if u_classes else "UNKNOWN"
-    t_label_raw = str(t_classes[t_idx]) if t_classes else "UNKNOWN"
-    t_label = _normalize_incident(t_label_raw)
+    t_label = _normalize_incident(str(t_classes[t_idx]) if t_classes else "UNKNOWN")
 
-    # Áp ngưỡng τ sau khi calibration (để tránh dự đoán "gượng")
     u_max, t_max = float(up[u_idx]), float(tp[t_idx])
+    conf = float(min(u_max, t_max))  # confidence chung
+
+    # 2) Hybrid guard cho TV (chỉ nắn khi model chưa quá tự tin)
+    if conf < 0.90:
+        vi = text.lower()
+        # incident-type cues
+        if any(k in vi for k in ["mưa lớn", "mưa to", "mưa dông", "mưa bão", "mưa"]):
+            t_label = "RAIN"
+        if any(k in vi for k in ["ngập", "ngập nước", "lũ", "lũ lụt", "nước dâng", "ngập đến"]):
+            t_label = "FLOOD"
+        if any(k in vi for k in ["mất điện", "cúp điện", "điện bị cắt", "đứt dây điện", "trạm biến áp"]):
+            t_label = "ELECTRIC"
+        if any(k in vi for k in ["cây đổ", "cây ngã", "cây bật gốc", "cây gãy"]):
+            t_label = "TREE_DOWN"
+        if any(k in vi for k in ["sạt lở", "sụt lún", "lở đất"]):
+            t_label = "LANDSLIDE"
+        # urgency cues
+        if any(k in vi for k in ["ngập sâu", "không di chuyển được", "mắc kẹt", "khẩn cấp", "nguy hiểm"]):
+            u_label = "HIGH"
+        elif any(k in vi for k in ["đường bị chặn", "cản trở", "hư hỏng", "cúp điện", "trơn trượt"]):
+            u_label = "MEDIUM"
+
+    # 3) Áp ngưỡng tin cậy sau calibration (tránh ảo giác)
     if u_max < CONFIDENCE_MIN:
         u_label = "UNKNOWN"
     if t_max < CONFIDENCE_MIN:
         t_label = "UNKNOWN"
 
-    conf = float(min(u_max, t_max))
-    # Ép urgency về 4 mức (LOW/MEDIUM/HIGH/UNKNOWN) cho nhất quán
+    # Ép urgency về tập 4 mức
     if u_label not in {"LOW", "MEDIUM", "HIGH", "UNKNOWN"}:
-        # Nếu train bằng nhãn khác, map tạm theo rule đơn giản:
         m = {"LOW": "LOW", "MED": "MEDIUM", "MID": "MEDIUM", "HI": "HIGH"}
         u_label = m.get(u_label.upper(), "UNKNOWN")
 
     return HazardResp(urgency=u_label, incident_type=t_label, confidence=conf)
 
-# --------------- presence/update ---------------
 @app.post("/presence/update", response_model=PresenceUpdateResp)
 def presence_update(req: PresenceUpdateReq):
     # AI service chỉ validate/chuẩn hoá; broadcast/realtime do BE đảm nhiệm
     display_until = datetime.now(timezone.utc) + timedelta(minutes=30)
     return PresenceUpdateResp(ok=True, display_until=display_until)
 
-# --------------- sos/raise ---------------
 @app.post("/sos/raise", response_model=SosRaiseResp)
 def sos_raise(req: SosRaiseReq):
-    # Có thể gắn NLP nhẹ trên alert_body khi cần (không bắt buộc)
+    # Có thể gắn NLP nhẹ trên alert_body nếu cần
     sos_id = f"sos_{abs(hash((req.alert_body, req.lat, req.lon, req.radius_m)))%10_000_000}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=req.ttl_min)
     return SosRaiseResp(
