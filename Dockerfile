@@ -1,15 +1,3 @@
-# FROM golang:1.24-alpine
-
-# RUN mkdir /app
-
-# ADD . /app
-
-# WORKDIR /app
-
-# RUN go build -o main cmd/main.go
-
-# CMD ["/app/main"]
-
 # --- Base image ---
 FROM golang:1.24-alpine AS builder
 
@@ -26,22 +14,26 @@ ADD . /app
 # Build Go Gin server
 RUN go build -o main cmd/main.go
 
-# Cài Python dependencies
-RUN pip install --no-cache-dir fastapi uvicorn scikit-learn joblib
+# --- Cài Python dependencies trong virtualenv ---
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install fastapi uvicorn scikit-learn joblib
 
 # --- Final image ---
 FROM alpine:3.18
 
-# Copy Go binary và app
+# Copy toàn bộ app + Go binary + Python venv
 COPY --from=builder /app /app
+COPY --from=builder /opt/venv /opt/venv
+
 WORKDIR /app
 
-# Expose port Gin (Railway PORT)
+# Expose port Gin server (public)
 EXPOSE 8080
 
-# Copy entrypoint script
+# Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Start both services
+# Start cả 2 service
 CMD ["/entrypoint.sh"]
