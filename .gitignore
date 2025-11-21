@@ -4,11 +4,3 @@ bin/
 .idea
 .env
 .vscode
-__pycache__/
-*.py[cod]
-*.pkl
-*.pt
-ai-service/venv/
-ai-service/__pycache__/
-ai-service/data/
-ai-service/models/
