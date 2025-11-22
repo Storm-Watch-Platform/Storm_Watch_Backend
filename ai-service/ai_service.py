@@ -11,28 +11,32 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from translator import translate_vi_to_en  # dùng translator tiếng Việt -> tiếng Anh
+
 # ---------------- Config / ENV ----------------
 ROOT = Path(__file__).resolve().parent
 MODEL_DIR = Path(os.getenv("MODEL_DIR", ROOT / "models"))
 URG_PATH = MODEL_DIR / "urgency_clf.pkl"
 TYP_PATH = MODEL_DIR / "type_clf.pkl"
 
-# Ngưỡng "an toàn" sau khi probabilities đã calibrate (Platt/Temp)
-CONFIDENCE_MIN = float(os.getenv("CONFIDENCE_MIN", "0.65"))
+# Ngưỡng "an toàn" CHO INCIDENT TYPE thôi (urgency luôn giữ LOW/MEDIUM/HIGH)
+CONFIDENCE_MIN_TYPE = float(os.getenv("CONFIDENCE_MIN_TYPE", "0.65"))
 
 _ALLOWED_INCIDENT = {
     "FLOOD", "RAIN", "LANDSLIDE", "ELECTRIC", "TREE_DOWN",
     "WIND", "STORM", "OTHER", "UNKNOWN"
 }
 
-# ---------------- Models ----------------
+# ---------------- Pydantic Models ----------------
 class HazardReq(BaseModel):
     text: str = Field(min_length=1)
+
 
 class HazardResp(BaseModel):
     urgency: Literal["LOW", "MEDIUM", "HIGH", "UNKNOWN"]
     incident_type: str
     confidence: float = Field(ge=0, le=1)
+
 
 class PresenceUpdateReq(BaseModel):
     lat: float = Field(ge=-90, le=90)
@@ -43,21 +47,23 @@ class PresenceUpdateReq(BaseModel):
     @field_validator("accuracy_m")
     @classmethod
     def check_accuracy(cls, v):
-        # nếu không có accuracy -> OK; nếu có mà quá tệ thì clip
         if v is None:
             return v
         return min(v, 5000.0)  # 5km trần
+
 
 class PresenceUpdateResp(BaseModel):
     ok: bool
     display_until: datetime
 
+
 class SosRaiseReq(BaseModel):
     alert_body: str = Field(min_length=1)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
-    radius_m: int = Field(ge=100, le=5000)  # UI gợi ý 2km nhưng cho phép 100..5000
+    radius_m: int = Field(ge=100, le=5000)
     ttl_min: int = Field(ge=5, le=180)
+
 
 class SosRaiseResp(BaseModel):
     ok: bool
@@ -66,9 +72,18 @@ class SosRaiseResp(BaseModel):
     radius_m: int
     expires_at: datetime
 
+
 # ---------------- Load models in lifespan ----------------
 urgency_model = None
 type_model = None
+
+
+def _looks_non_english(s: str) -> bool:
+    """Heuristic: nếu có ký tự Unicode > 127 (dấu tiếng Việt, emoji, v.v.) thì coi như non-English."""
+    if not s:
+        return False
+    return any(ord(ch) > 127 for ch in s)
+
 
 def _try_load(path: Path):
     try:
@@ -78,6 +93,7 @@ def _try_load(path: Path):
     except Exception as e:
         print(f"[ai-service] Failed to load {path}: {e}")
         return None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,17 +105,14 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        # dọn tài nguyên nếu cần
         print("[lifespan] shutdown")
-        # (joblib models là in-memory; đặt None để GC)
-        # Không cần đóng file descriptor vì đã load xong.
-app = FastAPI(title="StormSafe AI Service", version="1.1.0", lifespan=lifespan)
+
+
+app = FastAPI(title="StormSafe AI Service", version="1.2.0", lifespan=lifespan)
 
 # ---------------- Utilities ----------------
 def _final_classes(model) -> list[str]:
-    """
-    Lấy classes_ từ estimator cuối của Pipeline/CalibratedClassifierCV.
-    """
+    """Lấy classes_ từ estimator cuối của Pipeline/CalibratedClassifierCV."""
     named = getattr(model, "named_steps", None)
     if named and "clf" in named and hasattr(named["clf"], "classes_"):
         return list(named["clf"].classes_)
@@ -107,27 +120,41 @@ def _final_classes(model) -> list[str]:
         return list(model.classes_)
     raise RuntimeError("Cannot resolve classes_ from model")
 
+
 def _normalize_incident(label: str) -> str:
     lab = (label or "").upper()
     return lab if lab in _ALLOWED_INCIDENT else "UNKNOWN"
+
 
 # ---------------- Endpoints ----------------
 @app.get("/health")
 def health():
     return {"ok": bool(urgency_model) and bool(type_model)}
 
+
 @app.post("/classify/hazard-text", response_model=HazardResp)
 def classify_hazard_text(req: HazardReq):
     if urgency_model is None or type_model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    text = req.text.strip()
-    if not text:
+    orig_text = req.text.strip()
+    if not orig_text:
         raise HTTPException(status_code=400, detail="Empty text")
 
+    # 0) Nếu là tiếng Việt / non-English -> dịch sang tiếng Anh cho model
+    text_for_model = orig_text
+    if _looks_non_english(orig_text):
+        try:
+            text_for_model = translate_vi_to_en(orig_text)
+            if not text_for_model:
+                text_for_model = orig_text  # fallback
+        except Exception as e:
+            print("[ai-service] translate_vi_to_en failed:", e)
+            text_for_model = orig_text
+
     # 1) Dự đoán với xác suất đã calibrate (CalibratedClassifierCV)
-    up = urgency_model.predict_proba([text])[0]
-    tp = type_model.predict_proba([text])[0]
+    up = urgency_model.predict_proba([text_for_model])[0]
+    tp = type_model.predict_proba([text_for_model])[0]
 
     u_classes = _final_classes(urgency_model)
     t_classes = _final_classes(type_model)
@@ -138,49 +165,60 @@ def classify_hazard_text(req: HazardReq):
     u_max, t_max = float(up[u_idx]), float(tp[t_idx])
     conf = float(min(u_max, t_max))  # confidence chung
 
-    # 2) Hybrid guard cho TV (chỉ nắn khi model chưa quá tự tin)
+    # 2) Hybrid guard cho tiếng Việt (dựa trên orig_text)
+    incident_overridden = False
+    urgency_overridden = False
+
     if conf < 0.90:
-        vi = text.lower()
+        vi = orig_text.lower()
+
         # incident-type cues
         if any(k in vi for k in ["mưa lớn", "mưa to", "mưa dông", "mưa bão", "mưa"]):
             t_label = "RAIN"
+            incident_overridden = True
         if any(k in vi for k in ["ngập", "ngập nước", "lũ", "lũ lụt", "nước dâng", "ngập đến"]):
             t_label = "FLOOD"
+            incident_overridden = True
         if any(k in vi for k in ["mất điện", "cúp điện", "điện bị cắt", "đứt dây điện", "trạm biến áp"]):
             t_label = "ELECTRIC"
+            incident_overridden = True
         if any(k in vi for k in ["cây đổ", "cây ngã", "cây bật gốc", "cây gãy"]):
             t_label = "TREE_DOWN"
+            incident_overridden = True
         if any(k in vi for k in ["sạt lở", "sụt lún", "lở đất"]):
             t_label = "LANDSLIDE"
+            incident_overridden = True
+
         # urgency cues
         if any(k in vi for k in ["ngập sâu", "không di chuyển được", "mắc kẹt", "khẩn cấp", "nguy hiểm"]):
             u_label = "HIGH"
+            urgency_overridden = True
         elif any(k in vi for k in ["đường bị chặn", "cản trở", "hư hỏng", "cúp điện", "trơn trượt"]):
             u_label = "MEDIUM"
+            urgency_overridden = True
 
-    # 3) Áp ngưỡng tin cậy sau calibration (tránh ảo giác)
-    if u_max < CONFIDENCE_MIN:
-        u_label = "UNKNOWN"
-    if t_max < CONFIDENCE_MIN:
+    # 3) Áp ngưỡng tin cậy CHỈ cho incident_type
+    #    Urgency: luôn giữ LOW/MEDIUM/HIGH (hoặc heuristic), không set UNKNOWN chỉ vì prob thấp.
+    if (not incident_overridden) and t_max < CONFIDENCE_MIN_TYPE:
         t_label = "UNKNOWN"
 
     # Ép urgency về tập 4 mức
     if u_label not in {"LOW", "MEDIUM", "HIGH", "UNKNOWN"}:
-        m = {"LOW": "LOW", "MED": "MEDIUM", "MID": "MEDIUM", "HI": "HIGH"}
-        u_label = m.get(u_label.upper(), "UNKNOWN")
+        mapping = {"LOW": "LOW", "MED": "MEDIUM", "MID": "MEDIUM", "HI": "HIGH"}
+        u_label = mapping.get(u_label.upper(), "UNKNOWN")
 
     return HazardResp(urgency=u_label, incident_type=t_label, confidence=conf)
 
+
 @app.post("/presence/update", response_model=PresenceUpdateResp)
 def presence_update(req: PresenceUpdateReq):
-    # AI service chỉ validate/chuẩn hoá; broadcast/realtime do BE đảm nhiệm
     display_until = datetime.now(timezone.utc) + timedelta(minutes=30)
     return PresenceUpdateResp(ok=True, display_until=display_until)
 
+
 @app.post("/sos/raise", response_model=SosRaiseResp)
 def sos_raise(req: SosRaiseReq):
-    # Có thể gắn NLP nhẹ trên alert_body nếu cần
-    sos_id = f"sos_{abs(hash((req.alert_body, req.lat, req.lon, req.radius_m)))%10_000_000}"
+    sos_id = f"sos_{abs(hash((req.alert_body, req.lat, req.lon, req.radius_m))) % 10_000_000}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=req.ttl_min)
     return SosRaiseResp(
         ok=True,

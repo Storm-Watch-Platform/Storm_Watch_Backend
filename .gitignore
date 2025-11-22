@@ -12,3 +12,9 @@ ai-service/venv/
 ai-service/__pycache__/
 ai-service/data/
 ai-service/models/
+ai-service/data/raw/
+ai-service/data/hazard_reports_train.csv
+ai-service/models/
+*.pkl
+*.csv
+*.gz
