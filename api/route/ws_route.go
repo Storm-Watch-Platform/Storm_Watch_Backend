@@ -39,6 +39,7 @@ func NewWSRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database, g
 	locRepo := repository.NewLocationRepo(db, domain.CollectionLocation)
 	alertRepo := repository.NewAlertRepo(db, domain.CollectionAlert)
 	reportRepo := repository.NewReportRepo(db, domain.CollectionReport)
+	zoneRepo := repository.NewZoneRepository(db, domain.CollectionZone)
 
 	// ================== //
 	// 5. USE CASES
@@ -46,6 +47,7 @@ func NewWSRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database, g
 	locUC := usecase.NewLocationUC(queue, wsManager, locRepo, timeout)
 	alertUC := usecase.NewAlertUC(queue, wsManager, alertRepo, locUC, timeout)
 	reportUC := usecase.NewReportUC(queue, aiQueue, wsManager, reportRepo, timeout)
+	zoneUC := usecase.NewZoneUsecase(zoneRepo, timeout)
 
 	// ================== //
 	// 6. CONTROLLER
@@ -55,6 +57,7 @@ func NewWSRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database, g
 		LocationUC: locUC,
 		AlertUC:    alertUC,
 		ReportUC:   reportUC,
+		ZoneUC:     zoneUC,
 	}
 
 	// ================== //

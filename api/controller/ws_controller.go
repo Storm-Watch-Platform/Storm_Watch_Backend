@@ -2,6 +2,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -25,6 +26,7 @@ type WSController struct {
 	LocationUC *usecase.LocationUseCase
 	ReportUC   *usecase.ReportUseCase
 	AlertUC    *usecase.AlertUseCase // pointer
+	ZoneUC     domain.ZoneUsecase
 }
 
 func (c *WSController) HandleWS(ctx *gin.Context) {
@@ -107,6 +109,7 @@ func (c *WSController) handleFrames(client *ws.Client) {
 						Visibility: body.Visibility,
 					}
 					c.AlertUC.Handle(client, alert)
+					c.ZoneUC.AddRiskOrCreate(context.Background(), body.Lat, body.Lon, 0.3, body.RadiusM)
 
 				case "resolve":
 					if body.AlertID == "" {

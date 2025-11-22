@@ -67,15 +67,29 @@ func (zu *zoneUsecase) AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrem
 			},
 			Radius:    defaultRadius,
 			RiskScore: riskIncrement,
-			Label:     "DANGER",
+			Label:     "SAFE",
 			UpdatedAt: time.Now().UnixMilli(),
 		}
 		return zu.zoneRepository.Create(ctx2, newZone)
+	}
+	getLabel := func(riskscorein float64) string {
+		switch {
+		case riskscorein < 0.3:
+			return "SAFE"
+		case riskscorein < 0.6:
+			return "CAUTION"
+		default:
+			return "DANGER"
+		}
 	}
 
 	// 3️⃣ Nếu có zone → tăng risk
 	for _, z := range zones {
 		z.RiskScore += riskIncrement
+		if z.RiskScore > 1 {
+			z.RiskScore = 1
+		}
+		z.Label = getLabel(z.RiskScore)
 		z.UpdatedAt = time.Now().UnixMilli()
 		if err := zu.zoneRepository.Update(ctx2, &z); err != nil {
 			return err
