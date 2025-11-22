@@ -23,4 +23,7 @@ func NewZoneRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database,
 	group.GET("/zones", zc.FetchInBounds)
 	group.GET("/zones/by-location", zc.FetchByLatLon)
 	group.GET("/zones/all", zc.FetchAll)
+
+	// decayWorker := worker.NewRiskDecayWorker(zc.ZoneUsecase, 15*time.Minute)
+	// decayWorker.Start()
 }

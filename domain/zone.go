@@ -47,4 +47,6 @@ type ZoneUsecase interface {
 	FetchInBounds(ctx context.Context, minLat, minLon, maxLat, maxLon float64) ([]Zone, error)
 	FetchAllByLatLon(ctx context.Context, lat, lon float64) ([]Zone, error)
 	AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrement, defaultRadius float64) error
+	Update(ctx context.Context, z *Zone) error
+	Delete(ctx context.Context, id primitive.ObjectID) error
 }

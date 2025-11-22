@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type zoneUsecase struct {
@@ -136,6 +137,28 @@ func (zu *zoneUsecase) SetMaxRisk(ctx context.Context, lat, lon, newRisk float64
 		if err := zu.zoneRepository.Update(ctx2, &z); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// Update zone
+func (zu *zoneUsecase) Update(ctx context.Context, z *domain.Zone) error {
+	ctx2, cancel := context.WithTimeout(ctx, zu.contextTimeout)
+	defer cancel()
+
+	return zu.zoneRepository.Update(ctx2, z)
+}
+
+// Delete zone theo ID
+func (zu *zoneUsecase) Delete(ctx context.Context, id primitive.ObjectID) error {
+	ctx2, cancel := context.WithTimeout(ctx, zu.contextTimeout)
+	defer cancel()
+
+	if repoWithDelete, ok := zu.zoneRepository.(interface {
+		Delete(ctx context.Context, id primitive.ObjectID) error
+	}); ok {
+		return repoWithDelete.Delete(ctx2, id)
 	}
 
 	return nil
