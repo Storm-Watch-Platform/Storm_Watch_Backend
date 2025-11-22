@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/domain"
@@ -103,4 +104,34 @@ func (gc *GroupController) JoinGroup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, domain.SuccessResponse{Message: "Joined group successfully"})
+}
+
+// 📍 GET /groups/:groupId — lấy thông tin group theo ID
+func (gc *GroupController) GetGroupByID(c *gin.Context) {
+	idStr := c.Param("groupId")
+
+	group, err := gc.GroupUsecase.(interface {
+		GetGroupByIDString(c context.Context, idStr string) (*domain.Group, error)
+	}).GetGroupByIDString(c, idStr) // gọi hàm usecase vừa tạo
+	if err != nil {
+		c.JSON(http.StatusNotFound, domain.ErrorResponse{Message: "Group not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, group)
+}
+
+func (gc *GroupController) GetMemberInGroup(c *gin.Context) {
+	groupID := c.Param("groupId")
+	memberID := c.Param("memberId")
+
+	member, err := gc.GroupUsecase.GetMemberInGroup(c, groupID, memberID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, member)
 }

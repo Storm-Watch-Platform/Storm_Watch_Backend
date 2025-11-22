@@ -11,23 +11,26 @@ import (
 )
 
 type groupUsecase struct {
-	groupRepository  domain.GroupRepository
-	memberRepository domain.MemberRepository
-	userRepository   domain.UserRepository
-	contextTimeout   time.Duration
+	groupRepository    domain.GroupRepository
+	memberRepository   domain.MemberRepository
+	userRepository     domain.UserRepository
+	locationRepository domain.LocationRepository
+	contextTimeout     time.Duration
 }
 
 func NewGroupUsecase(
 	groupRepo domain.GroupRepository,
 	memberRepo domain.MemberRepository,
 	userRepo domain.UserRepository,
+	locationRepo domain.LocationRepository,
 	timeout time.Duration,
 ) domain.GroupUsecase {
 	return &groupUsecase{
-		groupRepository:  groupRepo,
-		memberRepository: memberRepo,
-		userRepository:   userRepo,
-		contextTimeout:   timeout,
+		groupRepository:    groupRepo,
+		memberRepository:   memberRepo,
+		userRepository:     userRepo,
+		locationRepository: locationRepo,
+		contextTimeout:     timeout,
 	}
 }
 
@@ -160,4 +163,85 @@ func (u *groupUsecase) JoinGroup(ctx context.Context, userID string, inviteCode 
 	}
 
 	return nil
+}
+
+// 📍 Lấy thông tin Group từ string ID
+func (u *groupUsecase) GetGroupByIDString(ctx context.Context, idStr string) (*domain.Group, error) {
+	c, cancel := context.WithTimeout(ctx, u.contextTimeout)
+	defer cancel()
+
+	// Convert string -> ObjectID
+	groupID, err := primitive.ObjectIDFromHex(idStr)
+	if err != nil {
+		return nil, errors.New("invalid group id")
+	}
+
+	// Lấy group từ repository
+	group, err := u.groupRepository.GetByID(c, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &group, nil
+}
+
+func (gu *groupUsecase) GetMemberInGroup(ctx context.Context, groupID, memberID string) (*domain.GroupMemberDetail, error) {
+
+	// Convert IDs
+	gID, err := primitive.ObjectIDFromHex(groupID)
+	if err != nil {
+		return nil, err
+	}
+	uID, err := primitive.ObjectIDFromHex(memberID)
+	if err != nil {
+		return nil, err
+	}
+	// Step 1: Load group
+	group, err := gu.groupRepository.GetByID(ctx, gID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 2: Check membership
+	isMember := false
+	for _, id := range group.MemberIDs {
+		if id == uID {
+			isMember = true
+			break
+		}
+	}
+	if !isMember {
+		return nil, fmt.Errorf("user not in this group")
+	}
+
+	// Step 3: Load user info
+	user, err := gu.userRepository.GetByID(ctx, uID.Hex())
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 4: Load latest location for this user
+	loc, err := gu.locationRepository.GetByUserID(ctx, uID.Hex())
+	if err != nil {
+		// location optional -> return user only
+		loc = nil
+	}
+
+	// Step 5: Combine response
+	resp := &domain.GroupMemberDetail{
+		ID:    user.ID.Hex(),
+		Name:  user.Name,
+		Phone: user.Phone,
+	}
+
+	if loc != nil {
+		resp.Location = domain.MemberLocation{
+			AccuracyM:   loc.AccuracyM,
+			Status:      loc.Status,
+			UpdatedAt:   loc.UpdatedAt,
+			Coordinates: loc.Location,
+		}
+	}
+
+	return resp, nil
 }

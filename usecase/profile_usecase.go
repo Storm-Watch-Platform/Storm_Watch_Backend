@@ -23,10 +23,24 @@ func (pu *profileUsecase) GetProfileByID(c context.Context, userID string) (*dom
 	ctx, cancel := context.WithTimeout(c, pu.contextTimeout)
 	defer cancel()
 
+	// Get User from repository
 	user, err := pu.userRepository.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &domain.Profile{Name: user.Name, Phone: user.Phone, ID: user.ID.Hex()}, nil
+	// Convert ObjectIDs to strings
+	groupStr := make([]string, len(user.GroupIDs))
+	for i, id := range user.GroupIDs {
+		groupStr[i] = id.Hex()
+	}
+
+	profile := &domain.Profile{
+		Name:  user.Name,
+		Phone: user.Phone,
+		ID:    user.ID.Hex(),
+		Group: groupStr,
+	}
+
+	return profile, nil
 }

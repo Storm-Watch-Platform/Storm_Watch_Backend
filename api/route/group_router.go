@@ -16,9 +16,10 @@ func NewGroupRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database
 	gr := repository.NewGroupRepository(db, domain.CollectionGroup) // tạo user repository để làm việc với collection user
 	mr := repository.NewMemberRepository(db, domain.CollectionMember)
 	ur := repository.NewUserRepository(db, domain.CollectionUser)
+	lr := repository.NewLocationRepo(db, domain.CollectionLocation)
 
 	gc := &controller.GroupController{ // tạo controller
-		GroupUsecase: usecase.NewGroupUsecase(gr, mr, ur, timeout),
+		GroupUsecase: usecase.NewGroupUsecase(gr, mr, ur, lr, timeout),
 	}
 
 	groupRoutes := group.Group("/groups")
@@ -38,5 +39,9 @@ func NewGroupRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database
 
 		// xóa group chưa xóa người (index groupid & userid trong member) -> nên chuyển thành xóa member khỏi group
 		groupRoutes.DELETE("/:groupId/members", gc.Delete)
+
+		groupRoutes.GET("/:groupId", gc.GetGroupByID)
+
+		groupRoutes.GET("/:groupId/members/:memberId", gc.GetMemberInGroup)
 	}
 }

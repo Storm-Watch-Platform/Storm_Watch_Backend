@@ -22,6 +22,22 @@ type Group struct {
 	CreatedAt  time.Time            `bson:"createdAt" json:"createdAt"`
 }
 
+type GroupMemberDetail struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Phone string `json:"phone"`
+
+	Location MemberLocation `json:"location"`
+}
+
+type MemberLocation struct {
+	AccuracyM   float64  `json:"accuracy_m"`
+	Type        string   `json:"type"`
+	Status      string   `json:"status"`
+	UpdatedAt   int64    `json:"updated_at"`
+	Coordinates GeoPoint `json:"location"`
+}
+
 // Member: lưu thông tin từng người trong nhóm + vị trí realtime
 type Member struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
@@ -57,4 +73,5 @@ type GroupUsecase interface {
 	DeleteGroup(c context.Context, userID string, groupID primitive.ObjectID) error
 	GetInviteCodeByGroupID(c context.Context, groupID primitive.ObjectID) (string, error)
 	JoinGroup(ctx context.Context, userID string, inviteCode string) error
+	GetMemberInGroup(ctx context.Context, groupID, memberID string) (*GroupMemberDetail, error)
 }
