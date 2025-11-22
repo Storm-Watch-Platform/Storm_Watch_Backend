@@ -34,7 +34,10 @@ func (zc *ZoneController) Create(c *gin.Context) {
 	}
 
 	zone := &domain.Zone{
-		Center:    [2]float64{req.Lon, req.Lat},
+		Center: domain.GeoPoint{
+			Type:        "Point",
+			Coordinates: [2]float64{req.Lon, req.Lat},
+		},
 		Radius:    req.Radius,
 		RiskScore: req.RiskScore,
 		Label:     req.Label,

@@ -27,7 +27,7 @@ func snapGrid(lat, lon float64) (float64, float64) {
 }
 
 // distanceMeters tính khoảng cách Haversine
-func distanceMeters(lat1, lon1, lat2, lon2 float64) float64 {
+func distanceMetersCell(lat1, lon1, lat2, lon2 float64) float64 {
 	const R = 6371000 // bán kính Trái Đất (m)
 	latRad1 := lat1 * math.Pi / 180
 	latRad2 := lat2 * math.Pi / 180
@@ -106,7 +106,7 @@ func (uc *CellUsecaseImpl) UpdateCellsByRadius(ctx context.Context, lat, lon, ra
 		for dy := -steps; dy <= steps; dy++ {
 			cLat := lat + float64(dx)*cellSize
 			cLon := lon + float64(dy)*cellSize
-			if distanceMeters(lat, lon, cLat, cLon) > radius {
+			if distanceMetersCell(lat, lon, cLat, cLon) > radius {
 				continue
 			}
 

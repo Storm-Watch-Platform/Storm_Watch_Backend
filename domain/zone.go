@@ -13,10 +13,10 @@ const (
 // Zone — khu vực cảnh báo dạng hình tròn
 type Zone struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Center    [2]float64         `bson:"center"   json:"center"` // [lon, lat]
-	Radius    float64            `bson:"radius"   json:"radius"` // mét
+	Center    GeoPoint           `bson:"center" json:"center"` // GeoJSON Point
+	Radius    float64            `bson:"radius" json:"radius"` // meters
 	RiskScore float64            `bson:"riskScore" json:"riskScore"`
-	Label     string             `bson:"label"    json:"label"` // SAFE / LOW / MEDIUM / HIGH
+	Label     string             `bson:"label" json:"label"`
 	UpdatedAt int64              `bson:"updatedAt" json:"updatedAt"`
 }
 

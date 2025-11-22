@@ -61,7 +61,10 @@ func (zu *zoneUsecase) AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrem
 	if len(zones) == 0 {
 		// 2️⃣ Nếu chưa có zone nào → tạo mới
 		newZone := &domain.Zone{
-			Center:    [2]float64{lon, lat},
+			Center: domain.GeoPoint{
+				Type:        "Point",
+				Coordinates: [2]float64{lon, lat},
+			},
 			Radius:    defaultRadius,
 			RiskScore: riskIncrement,
 			Label:     "DANGER",
