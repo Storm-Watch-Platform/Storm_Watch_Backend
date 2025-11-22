@@ -17,9 +17,11 @@ type Report struct {
 	Image       string             `bson:"image,omitempty" json:"image,omitempty"` // Base64
 	Location    GeoPoint           `bson:"location" json:"location"`
 
-	Timestamp  int64             `bson:"timestamp" json:"timestamp"`
-	Status     string            `bson:"status" json:"status"`
-	Enrichment *ReportEnrichment `bson:"enrichment,omitempty" json:"enrichment,omitempty"`
+	Timestamp   int64             `bson:"timestamp" json:"timestamp"`
+	Status      string            `bson:"status" json:"status"`
+	PhoneNumber string            `bson:"phone_number" json:"phone_number"`
+	UserName    string            `bson:"user_name" json:"user_name"`
+	Enrichment  *ReportEnrichment `bson:"enrichment,omitempty" json:"enrichment,omitempty"`
 }
 type ReportEnrichment struct {
 	Category    string `bson:"category" json:"category"`         // “flood”, “fire”, “accident”...

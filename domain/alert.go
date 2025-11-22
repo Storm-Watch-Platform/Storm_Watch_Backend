@@ -10,15 +10,17 @@ import (
 const CollectionAlert = "alerts"
 
 type Alert struct {
-	ID         primitive.ObjectID `bson:"_id,omitempty" json:"alertId"`
-	UserID     string             `bson:"userID"`
-	Location   GeoPoint           `bson:"location" json:"location"`
-	Body       string             `bson:"body"`
-	RadiusM    float64            `bson:"radius_m"`
-	TTLMin     int                `bson:"ttl_min"`
-	ExpiresAt  time.Time          `bson:"expires_at"`
-	Visibility string             `bson:"visibility"` // userIDs nhìn thấy alert
-	Status     string             `bson:"status"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"alertId"`
+	UserID      string             `bson:"userID"`
+	Location    GeoPoint           `bson:"location" json:"location"`
+	Body        string             `bson:"body"`
+	RadiusM     float64            `bson:"radius_m"`
+	TTLMin      int                `bson:"ttl_min"`
+	ExpiresAt   time.Time          `bson:"expires_at"`
+	Visibility  string             `bson:"visibility"` // userIDs nhìn thấy alert
+	Status      string             `bson:"status"`
+	UserName    string             `bson:"user_name"`
+	PhoneNumber string             `bson:"phone_number"`
 }
 
 type AlertRepository interface {

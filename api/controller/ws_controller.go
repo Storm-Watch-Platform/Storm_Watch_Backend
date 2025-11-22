@@ -79,14 +79,16 @@ func (c *WSController) handleFrames(client *ws.Client) {
 			switch msgType {
 			case "alert":
 				var body struct {
-					Action     string  `json:"action"`     // "raise" hoặc "resolve"
-					AlertID    string  `json:"alertId"`    // dùng khi resolve
-					Body       string  `json:"body"`       // dùng khi raise
-					Lat        float64 `json:"lat"`        // dùng khi raise
-					Lon        float64 `json:"lon"`        // dùng khi raise
-					RadiusM    float64 `json:"radius_m"`   // dùng khi raise
-					TTLMin     int     `json:"ttl_min"`    // dùng khi raise
-					Visibility string  `json:"visibility"` // dùng khi raise
+					Action      string  `json:"action"`       // "raise" hoặc "resolve"
+					AlertID     string  `json:"alertId"`      // dùng khi resolve
+					Body        string  `json:"body"`         // dùng khi raise
+					Lat         float64 `json:"lat"`          // dùng khi raise
+					Lon         float64 `json:"lon"`          // dùng khi raise
+					RadiusM     float64 `json:"radius_m"`     // dùng khi raise
+					TTLMin      int     `json:"ttl_min"`      // dùng khi raise
+					Visibility  string  `json:"visibility"`   // dùng khi raise
+					UserName    string  `json:"user_name"`    // dùng khi raise
+					PhoneNumber string  `json:"phone_number"` // dùng khi raise
 				}
 
 				if err := json.Unmarshal([]byte(frame.Body), &body); err != nil {
@@ -103,10 +105,12 @@ func (c *WSController) handleFrames(client *ws.Client) {
 							Type:        "Point",
 							Coordinates: [2]float64{body.Lon, body.Lat},
 						},
-						RadiusM:    body.RadiusM,
-						TTLMin:     body.TTLMin,
-						ExpiresAt:  time.Now().Add(time.Duration(body.TTLMin) * time.Minute),
-						Visibility: body.Visibility,
+						RadiusM:     body.RadiusM,
+						TTLMin:      body.TTLMin,
+						ExpiresAt:   time.Now().Add(time.Duration(body.TTLMin) * time.Minute),
+						Visibility:  body.Visibility,
+						UserName:    body.UserName,
+						PhoneNumber: body.PhoneNumber,
 					}
 					c.AlertUC.Handle(client, alert)
 					c.ZoneUC.AddRiskOrCreate(context.Background(), body.Lat, body.Lon, 0.3, body.RadiusM)
@@ -157,6 +161,8 @@ func (c *WSController) handleFrames(client *ws.Client) {
 					Lat         float64 `json:"lat"`
 					Lon         float64 `json:"lon"`
 					Timestamp   int64   `json:"timestamp"`
+					UserName    string  `json:"user_name"`
+					PhoneNumber string  `json:"phone_number"`
 				}
 
 				if err := json.Unmarshal([]byte(frame.Body), &body); err != nil {
@@ -174,6 +180,8 @@ func (c *WSController) handleFrames(client *ws.Client) {
 						Type:        "Point",
 						Coordinates: [2]float64{body.Lon, body.Lat},
 					},
+					UserName:    body.UserName,
+					PhoneNumber: body.PhoneNumber,
 				}
 
 				c.ReportUC.Handle(client, report)
