@@ -44,10 +44,10 @@ func NewWSRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Database, g
 	// ================== //
 	// 5. USE CASES
 	// ================== //
+	zoneUC := usecase.NewZoneUsecase(zoneRepo, timeout)
 	locUC := usecase.NewLocationUC(queue, wsManager, locRepo, timeout)
 	alertUC := usecase.NewAlertUC(queue, wsManager, alertRepo, locUC, timeout)
-	reportUC := usecase.NewReportUC(queue, aiQueue, wsManager, reportRepo, timeout)
-	zoneUC := usecase.NewZoneUsecase(zoneRepo, timeout)
+	reportUC := usecase.NewReportUC(queue, aiQueue, wsManager, reportRepo, zoneUC, timeout)
 
 	// ================== //
 	// 6. CONTROLLER

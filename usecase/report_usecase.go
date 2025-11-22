@@ -19,9 +19,11 @@ type ReportUseCase struct {
 	repo    domain.ReportRepository
 	timeout time.Duration
 	AI      *ai.Client
+
+	zoneUC domain.ZoneUsecase
 }
 
-func NewReportUC(q *worker.PriorityQueue, aiq *worker.AIQueue, wsm *ws.WSManager, repo domain.ReportRepository, timeout time.Duration) *ReportUseCase {
+func NewReportUC(q *worker.PriorityQueue, aiq *worker.AIQueue, wsm *ws.WSManager, repo domain.ReportRepository, zoneUC domain.ZoneUsecase, timeout time.Duration) *ReportUseCase {
 	aiClient, err := ai.New()
 	if err != nil {
 		log.Fatal("Failed to create ReportUseCase:", err)
@@ -34,6 +36,20 @@ func NewReportUC(q *worker.PriorityQueue, aiq *worker.AIQueue, wsm *ws.WSManager
 		repo:    repo,
 		timeout: timeout,
 		AI:      aiClient,
+		zoneUC:  zoneUC,
+	}
+}
+
+func convertUrgencyToRisk(urgency string) float64 {
+	switch urgency {
+	case "LOW":
+		return 0.3
+	case "MEDIUM":
+		return 0.6
+	case "HIGH":
+		return 0.9
+	default:
+		return 0.2
 	}
 }
 
@@ -95,6 +111,22 @@ func (uc *ReportUseCase) Handle(client *ws.Client, r *domain.Report) error {
 		}); ok {
 			_ = repoWithUpdate.UpdateAI(ctx, r.ID.Hex(), r.Enrichment)
 		}
+
+		// 🟩🟩🟩 STEP 3 — UPDATE DANGER ZONE 🟩🟩🟩
+		riskIncrement := convertUrgencyToRisk(urgency)
+
+		lat := r.Location.Coordinates[1]
+		lon := r.Location.Coordinates[0]
+
+		// defaultRadius = 300m chẳng hạn
+		_ = uc.zoneUC.AddRiskOrCreate(
+			context.Background(),
+			lat,
+			lon,
+			riskIncrement,
+			3000.0,
+		)
+		// 🟩🟩🟩 END STEP 3 🟩🟩🟩
 
 		// uc.ws.BroadcastAIResult(userID, r.Enrichment) // nếu cần broadcast
 		// Chuẩn bị response gửi về client

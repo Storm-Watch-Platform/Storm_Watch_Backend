@@ -67,7 +67,7 @@ func (zu *zoneUsecase) AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrem
 			},
 			Radius:    defaultRadius,
 			RiskScore: riskIncrement,
-			Label:     "SAFE",
+			Label:     "LOW",
 			UpdatedAt: time.Now().UnixMilli(),
 		}
 		return zu.zoneRepository.Create(ctx2, newZone)
@@ -75,11 +75,11 @@ func (zu *zoneUsecase) AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrem
 	getLabel := func(riskscorein float64) string {
 		switch {
 		case riskscorein < 0.3:
-			return "SAFE"
+			return "LOW"
 		case riskscorein < 0.6:
-			return "CAUTION"
+			return "MEDIUM"
 		default:
-			return "DANGER"
+			return "HIGH"
 		}
 	}
 
@@ -91,6 +91,48 @@ func (zu *zoneUsecase) AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrem
 		}
 		z.Label = getLabel(z.RiskScore)
 		z.UpdatedAt = time.Now().UnixMilli()
+		if err := zu.zoneRepository.Update(ctx2, &z); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (zu *zoneUsecase) SetMaxRisk(ctx context.Context, lat, lon, newRisk float64) error {
+	ctx2, cancel := context.WithTimeout(ctx, zu.contextTimeout)
+	defer cancel()
+
+	zones, err := zu.zoneRepository.FetchAllByLatLon(ctx2, lat, lon)
+	if err != nil {
+		return err
+	}
+
+	// Helper map risk -> label
+	getLabel := func(r float64) string {
+		switch {
+		case r < 0.3:
+			return "LOW"
+		case r < 0.6:
+			return "MEDIUM"
+		default:
+			return "HIGH"
+		}
+	}
+
+	for _, z := range zones {
+		if z.RiskScore < newRisk {
+			z.RiskScore = newRisk
+		} else {
+			z.RiskScore += 0.1
+			if z.RiskScore > 1.0 {
+				z.RiskScore = 1.0
+			}
+		}
+
+		z.Label = getLabel(z.RiskScore)
+		z.UpdatedAt = time.Now().UnixMilli()
+
 		if err := zu.zoneRepository.Update(ctx2, &z); err != nil {
 			return err
 		}

@@ -20,13 +20,15 @@ func NewNearbyRouter(env *bootstrap.Env, timeout time.Duration, db mongo.Databas
 	alertRepo := repository.NewAlertRepo(db, domain.CollectionAlert)
 	reportRepo := repository.NewReportRepo(db, domain.CollectionReport)
 	locRepo := repository.NewLocationRepo(db, domain.CollectionLocation)
+	zoneRepo := repository.NewZoneRepository(db, domain.CollectionZone)
 
 	// -----------------------
 	// 2️⃣ UseCases
 	// -----------------------
 	locUC := usecase.NewLocationUC(nil, nil, locRepo, timeout)
 	alertUC := usecase.NewAlertUC(nil, nil, alertRepo, locUC, timeout)
-	reportUC := usecase.NewReportUC(nil, nil, nil, reportRepo, timeout)
+	zoneUC := usecase.NewZoneUsecase(zoneRepo, timeout)
+	reportUC := usecase.NewReportUC(nil, nil, nil, reportRepo, zoneUC, timeout)
 
 	// -----------------------
 	// 3️⃣ WS Manager (optional, nếu cần broadcast realtime)
