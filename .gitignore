@@ -15,6 +15,9 @@ ai-service/models/
 ai-service/data/raw/
 ai-service/data/hazard_reports_train.csv
 ai-service/models/
-*.pkl
+
+!ai-service/models/urgency_clf.pkl
+!ai-service/models/type_clf.pkl
+
 *.csv
 *.gz
