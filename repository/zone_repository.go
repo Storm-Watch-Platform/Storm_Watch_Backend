@@ -97,3 +97,20 @@ func distanceMeters(lat1, lon1, lat2, lon2 float64) float64 {
 
 	return R * c
 }
+
+// Update cập nhật một zone
+func (zr *zoneRepository) Update(ctx context.Context, z *domain.Zone) error {
+	coll := zr.db.Collection(zr.collection)
+	_, err := coll.UpdateOne(
+		ctx,
+		bson.M{"_id": z.ID},
+		bson.M{
+			"$set": bson.M{
+				"riskScore": z.RiskScore,
+				"label":     z.Label,
+				"updatedAt": z.UpdatedAt,
+			},
+		},
+	)
+	return err
+}

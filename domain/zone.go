@@ -34,6 +34,7 @@ type ZoneRepository interface {
 
 	// tìm zone nào chứa lat/lon (lat/lon nằm trong vòng tròn)
 	FetchAllByLatLon(ctx context.Context, lat, lon float64) ([]Zone, error)
+	Update(ctx context.Context, z *Zone) error
 }
 
 // ============================
@@ -45,4 +46,5 @@ type ZoneUsecase interface {
 	FetchAll(ctx context.Context) ([]Zone, error)
 	FetchInBounds(ctx context.Context, minLat, minLon, maxLat, maxLon float64) ([]Zone, error)
 	FetchAllByLatLon(ctx context.Context, lat, lon float64) ([]Zone, error)
+	AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrement, defaultRadius float64) error
 }
