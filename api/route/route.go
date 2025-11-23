@@ -3,6 +3,7 @@ package route
 import (
 	"time"
 
+	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/api/controller"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/api/middleware"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/bootstrap"
 	"github.com/Storm-Watch-Platform/Storm_Watch_Backend/mongo"
@@ -41,4 +42,8 @@ func Setup(env *bootstrap.Env, timeout time.Duration, db mongo.Database, gin *gi
 	// NewAlertMockRouter(env, timeout, db, publicRouter)
 
 	NewZoneRouter(env, timeout, db, publicRouter)
+
+	// route POST /ai/analyze
+	aiCtrl := controller.NewAIController(env)
+	protectedRouter.POST("/ai/analyze", aiCtrl.Analyze)
 }

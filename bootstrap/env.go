@@ -75,6 +75,7 @@ type Env struct {
 	RedisPort              string
 	RedisPass              string
 	RedisDB                int
+	GeminiAPIKey           string
 }
 
 func NewEnv() *Env {
@@ -89,6 +90,7 @@ func NewEnv() *Env {
 	env.ServerAddress = getString("SERVER_ADDRESS", ":8080")
 	env.ContextTimeout = getInt("CONTEXT_TIMEOUT", 10)
 	env.DBHost = getString("DB_HOST", "localhost")
+	env.GeminiAPIKey = getString("GEMINI_API_KEY", "")
 	env.DBPort = getString("DB_PORT", "5432")
 	env.DBUser = getString("DB_USER", "user")
 	env.DBPass = getString("DB_PASS", "pass")

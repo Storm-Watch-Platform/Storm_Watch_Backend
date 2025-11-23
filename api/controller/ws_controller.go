@@ -113,7 +113,7 @@ func (c *WSController) handleFrames(client *ws.Client) {
 						PhoneNumber: body.PhoneNumber,
 					}
 					c.AlertUC.Handle(client, alert)
-					c.ZoneUC.AddRiskOrCreate(context.Background(), body.Lat, body.Lon, 0.3, body.RadiusM)
+					c.ZoneUC.AddRiskOrCreate(context.Background(), body.Lat, body.Lon, 0.2, body.RadiusM)
 
 				case "resolve":
 					if body.AlertID == "" {

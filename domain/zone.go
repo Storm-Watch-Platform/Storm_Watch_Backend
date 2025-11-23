@@ -49,4 +49,5 @@ type ZoneUsecase interface {
 	AddRiskOrCreate(ctx context.Context, lat, lon, riskIncrement, defaultRadius float64) error
 	Update(ctx context.Context, z *Zone) error
 	Delete(ctx context.Context, id primitive.ObjectID) error
+	SetMaxRisk(ctx context.Context, lat, lon, newRisk float64) error
 }

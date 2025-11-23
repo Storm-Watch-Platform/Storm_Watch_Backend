@@ -218,12 +218,11 @@ func (uc *ReportUseCase) Handle(client *ws.Client, r *domain.Report) error {
 		lat := r.Location.Coordinates[1]
 		lon := r.Location.Coordinates[0]
 
-		if err := uc.zoneUC.AddRiskOrCreate(
+		if err := uc.zoneUC.SetMaxRisk(
 			context.Background(),
 			lat,
 			lon,
 			riskIncrement,
-			3000.0,
 		); err != nil {
 
 			uc.ws.SendToClient(client, "report_created", map[string]interface{}{
