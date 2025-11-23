@@ -17,7 +17,7 @@ type Client struct {
 func New() (*Client, error) {
 	base := os.Getenv("AI_SERVICE_BASE_URL")
 	if base == "" {
-		base = "http://localhost:8001"
+		base = "https://ai-service-billowing-breeze-3015.fly.dev"
 	}
 	httpc := &http.Client{Timeout: 30 * time.Second}
 	c, err := aiclient.NewClientWithResponses(base, aiclient.WithHTTPClient(httpc))
