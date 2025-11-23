@@ -1,0 +1,100 @@
+openapi: 3.0.3
+info: { title: StormSafe AI Service, version: 1.1.0 }
+paths:
+  /classify/hazard-text:
+    post:
+      summary: Classify hazard report text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HazardTextRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HazardTextResponse' }
+
+  /presence/update:
+    post:
+      summary: Validate & normalize a presence update (lat/lon/status/accuracy_m)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PresenceUpdateRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PresenceUpdateResponse' }
+
+  /sos/raise:
+    post:
+      summary: Validate & normalize a SOS alert request (alert_body + geo)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SosRaiseRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SosRaiseResponse' }
+
+components:
+  schemas:
+    HazardTextRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1 }
+    HazardTextResponse:
+      type: object
+      required: [urgency, incident_type, confidence]
+      properties:
+        urgency: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        incident_type: { type: string }
+        confidence: { type: number, format: float, minimum: 0, maximum: 1 }
+
+    PresenceUpdateRequest:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lon: { type: number, minimum: -180, maximum: 180 }
+        accuracy_m: { type: number, minimum: 0, nullable: true }
+        status: { type: string, enum: [SAFE, CAUTION, DANGER, UNKNOWN], default: UNKNOWN }
+    PresenceUpdateResponse:
+      type: object
+      required: [ok, display_until]
+      properties:
+        ok: { type: boolean }
+        display_until: { type: string, format: date-time }
+
+    SosRaiseRequest:
+      type: object
+      required: [alert_body, lat, lon, radius_m, ttl_min]
+      properties:
+        alert_body: { type: string, minLength: 1 }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lon: { type: number, minimum: -180, maximum: 180 }
+        radius_m: { type: integer, minimum: 100, maximum: 5000 }
+        ttl_min: { type: integer, minimum: 5, maximum: 180 }
+    SosRaiseResponse:
+      type: object
+      required: [ok, sos_id, center, radius_m, expires_at]
+      properties:
+        ok: { type: boolean }
+        sos_id: { type: string }
+        center:
+          type: array
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+        radius_m: { type: integer }
+        expires_at: { type: string, format: date-time }
