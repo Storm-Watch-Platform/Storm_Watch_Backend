@@ -53,84 +53,188 @@ func convertUrgencyToRisk(urgency string) float64 {
 	}
 }
 
+// func (uc *ReportUseCase) Handle(client *ws.Client, r *domain.Report) error {
+// 	r.UserID = client.UserID
+// 	if r.Timestamp == 0 {
+// 		r.Timestamp = time.Now().Unix()
+// 	}
+
+// 	// ✅ Nếu chưa có ID, tạo mới
+// 	if r.ID.IsZero() {
+// 		r.ID = primitive.NewObjectID()
+// 	}
+
+// 	// Step 1: save + broadcast in PriorityQueue
+// 	uc.queue.Push(worker.Job{
+// 		Priority: 2, // Report > Location
+// 		Exec: func() {
+// 			ctx, cancel := context.WithTimeout(context.Background(), uc.timeout)
+// 			defer cancel()
+
+// 			// Save report
+// 			_ = uc.repo.Create(ctx, r)
+// 			// uc.ws.BroadcastReport(client, r)
+// 		},
+// 	})
+
+// 	// Step 2: AI analyze — run in separate AI queue
+// 	uc.aiQueue.Push(func() {
+// 		// Tạo context riêng cho AI
+// 		ctx, cancel := context.WithTimeout(context.Background(), uc.timeout)
+// 		defer cancel()
+
+// 		// Nối các trường làm input cho AI
+// 		inputText := r.Type + " " + r.Detail + " " + r.Description
+
+// 		// print("AI INPUT TEXT: ", r.ID.Hex())
+// 		// Gọi AI client mới
+// 		urgency, category, confidence, err := uc.AI.ClassifyHazardText(ctx, inputText)
+
+// 		if err != nil {
+// 			urgency = "MEDIUM"
+// 			category = "OTHER"
+// 			confidence = 0.0
+// 		}
+
+// 		// Tạo enrichment mới
+// 		r.Enrichment = &domain.ReportEnrichment{
+// 			Category:    category,
+// 			Urgency:     urgency,
+// 			Summary:     r.Detail,              // Hoặc AI summary nếu có
+// 			Confidence:  int(confidence * 100), // float64 -> 0-100 int
+// 			ExtractedAt: time.Now().Unix(),
+// 		}
+
+// 		// Update report trong DB với AI result
+// 		if repoWithUpdate, ok := uc.repo.(interface {
+// 			UpdateAI(ctx context.Context, reportID string, enrichment *domain.ReportEnrichment) error
+// 		}); ok {
+// 			_ = repoWithUpdate.UpdateAI(ctx, r.ID.Hex(), r.Enrichment)
+// 		}
+
+// 		// 🟩🟩🟩 STEP 3 — UPDATE DANGER ZONE 🟩🟩🟩
+// 		riskIncrement := convertUrgencyToRisk(urgency)
+
+// 		lat := r.Location.Coordinates[1]
+// 		lon := r.Location.Coordinates[0]
+
+// 		// defaultRadius = 300m chẳng hạn
+// 		_ = uc.zoneUC.AddRiskOrCreate(
+// 			context.Background(),
+// 			lat,
+// 			lon,
+// 			riskIncrement,
+// 			3000.0,
+// 		)
+// 		// 🟩🟩🟩 END STEP 3 🟩🟩🟩
+
+// 		// uc.ws.BroadcastAIResult(userID, r.Enrichment) // nếu cần broadcast
+// 		// Chuẩn bị response gửi về client
+// 		response := map[string]interface{}{
+// 			"ok":     true,
+// 			"report": r,
+// 			"ai": map[string]interface{}{
+// 				"urgency":       urgency,
+// 				"incident_type": category,
+// 				"confidence":    confidence,
+// 			},
+// 		}
+
+// 		// Gửi trực tiếp cho client qua WS
+// 		uc.ws.SendToClient(client, "report_created", response)
+
+// 	})
+
+// 	return nil
+// }
+
 func (uc *ReportUseCase) Handle(client *ws.Client, r *domain.Report) error {
 	r.UserID = client.UserID
 	if r.Timestamp == 0 {
 		r.Timestamp = time.Now().Unix()
 	}
 
-	// ✅ Nếu chưa có ID, tạo mới
 	if r.ID.IsZero() {
 		r.ID = primitive.NewObjectID()
 	}
 
-	// Step 1: save + broadcast in PriorityQueue
+	// STEP 1 — Save report
 	uc.queue.Push(worker.Job{
-		Priority: 2, // Report > Location
+		Priority: 2,
 		Exec: func() {
 			ctx, cancel := context.WithTimeout(context.Background(), uc.timeout)
 			defer cancel()
 
-			// Save report
-			_ = uc.repo.Create(ctx, r)
-			// uc.ws.BroadcastReport(client, r)
+			if err := uc.repo.Create(ctx, r); err != nil {
+				uc.ws.SendToClient(client, "report_created", map[string]interface{}{
+					"ok":    false,
+					"error": "Failed to save report: " + err.Error(),
+				})
+				return
+			}
 		},
 	})
 
-	// Step 2: AI analyze — run in separate AI queue
+	// STEP 2 — AI analyze
 	uc.aiQueue.Push(func() {
-		// Tạo context riêng cho AI
 		ctx, cancel := context.WithTimeout(context.Background(), uc.timeout)
 		defer cancel()
 
-		// Nối các trường làm input cho AI
 		inputText := r.Type + " " + r.Detail + " " + r.Description
 
-		// print("AI INPUT TEXT: ", r.ID.Hex())
-		// Gọi AI client mới
 		urgency, category, confidence, err := uc.AI.ClassifyHazardText(ctx, inputText)
-
 		if err != nil {
+			// Fallback như default
 			urgency = "MEDIUM"
 			category = "OTHER"
 			confidence = 0.0
 		}
 
-		// Tạo enrichment mới
+		// Build enrichment
 		r.Enrichment = &domain.ReportEnrichment{
 			Category:    category,
 			Urgency:     urgency,
-			Summary:     r.Detail,              // Hoặc AI summary nếu có
-			Confidence:  int(confidence * 100), // float64 -> 0-100 int
+			Summary:     r.Detail,
+			Confidence:  int(confidence * 100),
 			ExtractedAt: time.Now().Unix(),
 		}
 
-		// Update report trong DB với AI result
+		// UpdateAI
 		if repoWithUpdate, ok := uc.repo.(interface {
 			UpdateAI(ctx context.Context, reportID string, enrichment *domain.ReportEnrichment) error
 		}); ok {
-			_ = repoWithUpdate.UpdateAI(ctx, r.ID.Hex(), r.Enrichment)
+			if err := repoWithUpdate.UpdateAI(ctx, r.ID.Hex(), r.Enrichment); err != nil {
+				uc.ws.SendToClient(client, "report_created", map[string]interface{}{
+					"ok":    false,
+					"error": "Failed to update AI enrichment: " + err.Error(),
+				})
+				return
+			}
 		}
 
-		// 🟩🟩🟩 STEP 3 — UPDATE DANGER ZONE 🟩🟩🟩
+		// STEP 3 — Update danger zone
 		riskIncrement := convertUrgencyToRisk(urgency)
 
 		lat := r.Location.Coordinates[1]
 		lon := r.Location.Coordinates[0]
 
-		// defaultRadius = 300m chẳng hạn
-		_ = uc.zoneUC.AddRiskOrCreate(
+		if err := uc.zoneUC.AddRiskOrCreate(
 			context.Background(),
 			lat,
 			lon,
 			riskIncrement,
 			3000.0,
-		)
-		// 🟩🟩🟩 END STEP 3 🟩🟩🟩
+		); err != nil {
 
-		// uc.ws.BroadcastAIResult(userID, r.Enrichment) // nếu cần broadcast
-		// Chuẩn bị response gửi về client
-		response := map[string]interface{}{
+			uc.ws.SendToClient(client, "report_created", map[string]interface{}{
+				"ok":    false,
+				"error": "Failed to update danger zone: " + err.Error(),
+			})
+			return
+		}
+
+		// SUCCESS RESPONSE
+		uc.ws.SendToClient(client, "report_created", map[string]interface{}{
 			"ok":     true,
 			"report": r,
 			"ai": map[string]interface{}{
@@ -138,11 +242,7 @@ func (uc *ReportUseCase) Handle(client *ws.Client, r *domain.Report) error {
 				"incident_type": category,
 				"confidence":    confidence,
 			},
-		}
-
-		// Gửi trực tiếp cho client qua WS
-		uc.ws.SendToClient(client, "report_created", response)
-
+		})
 	})
 
 	return nil
